@@ -35,16 +35,16 @@ sapply(c(.cran_packages, .bioc_packages), package.version)
 # Import Data
 Load in all components created in the DADA2 analysis and the sample sheet
 ```{r}
-samdf <- read_csv("../data/samdf_CRS.csv")
+samdf <- readRDS("../data/samdf_CRS.rds")
 samdf <- data.frame(samdf)
 rownames(samdf) <- samdf$SAMPLE_NAME #because R - dplyr will not like making rownames, but it's fine for now.
 # seqtab is the sample:ASV table made in DADA2 - it should contain all samples and ASVs
 # Filter out samples that are CF positive for this analysis
-seqtab <- readRDS("/16S_output/seqtab.rds")
+seqtab <- readRDS("16S_output/seqtab.rds")
 # Table with all ASVs and assigned taxonomy using the SILVA database (Greengenes and RDP also available)
-taxtab <- readRDS("/16S_output/tax_species_final_silva_HOMD.rds")
+taxtab <- readRDS("16S_output/tax_species_final_silva_HOMD.rds")
 # Phylogenetic tree made using DECIPHER and Phangorn - import object and pull tree from the fitGTR
-fitGTR <- readRDS("/16S_output/fitGTR.rds")
+fitGTR <- readRDS("16S_output/fitGTR.rds")
 ```
 # Make Phyloseq Object
 ```{r}
@@ -80,6 +80,12 @@ tax.PHYSEQ <- tax.PHYSEQ %>%
 tax_table(PHYSEQ) <- tax.PHYSEQ
 PHYSEQ
 ```
+
+```{r}
+sample_names(PHYSEQ)
+```
+
+
 ## Filter out control samples and enrichment samples
 ```{r}
 # Just get the FESS sinus samples
@@ -209,7 +215,7 @@ CRS.pv.2
 ```
 Save this object as the minimally filtered dataset. Different applications may require different levels of filtering taxa after this step. Up to this point, the removal of taxa has been conservative.
 ```{r}
-saveRDS(CRS.pv.2, "../data/phyloseq_supervised_filt.rds")
+saveRDS(CRS.pv.2, "16S_output/phyloseq_supervised_filt.rds")
 ```
 
 
@@ -378,7 +384,7 @@ ggplot(prevdf.pv.unsuper, aes(TotalAbundance, Prevalence / nsamples(CRS.unsuper)
   facet_wrap(~Phylum) + theme(legend.position="none")
 ```
 ```{r}
-saveRDS(CRS.unsuper, "/16S_output/phyloseq_unsupervised_filt.rds")
+saveRDS(CRS.unsuper, "16S_output/phyloseq_unsupervised_filt.rds")
 ```
 
 Make a rarified dataset to test with different analyses
@@ -393,5 +399,5 @@ CRS.unsuper.rare <- rarefy_even_depth(CRS.unsuper,
 CRS.unsuper.rare
 ```
 ```{r}
-saveRDS(CRS.unsuper.rare, "/16S_output/phyloseq_unsupervised_filtered_rare.rds")
+saveRDS(CRS.unsuper.rare, "16S_output/phyloseq_unsupervised_filtered_rare.rds")
 ```

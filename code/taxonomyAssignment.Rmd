@@ -5,8 +5,8 @@ Author: "Sarah Lucas"
 # Setup
 ## Setup environment
 ```{r}
-.cran_packages <- c("tidyverse", "gridExtra", "ips")
-.bioc_packages <- c("dada2", "phyloseq", "DECIPHER", "phangorn", "ShortRead"
+.cran_packages <- c("tidyverse" )
+.bioc_packages <- c("dada2")
 
 .inst <- .cran_packages %in% installed.packages()
 if(any(!.inst)) {
@@ -51,7 +51,7 @@ unname(head(tax_species_silva))
 Here, allowMultiple is set to FALSE, meaning that the sequence must only have 1 exact match to be assigned to species level.
 ```{r}
 ## Add species assignment to taxonomy table: https://benjjneb.github.io/dada2/assign.html#species-assignment
-tax_species_silva_HOMD <- addSpecies(tax_silva, "TaxonomyTrainingSets/HOMD_16S_rRNA_RefSeq_V15.1.p9_dada2_addspecies.fasta", 
+tax_species_silva_HOMD <- addSpecies(tax_silva, "~/Documents/MICaB/Hunter_Lab/taxonomyTrainingSets/HOMD_16S_rRNA_RefSeq_V15.1.p9_dada2_addspecies.fasta", 
                                      verbose=TRUE, 
                                      allowMultiple = FALSE)
 colnames(tax_species_silva_HOMD) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species_HOMD")
