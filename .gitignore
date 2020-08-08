@@ -1,0 +1,7 @@
+# ignore files
+*.fastq.gz
+*.BAM
+*.BAM.indel.vcf
+*.BAM.summary
+*.rds
+.Rproj.user

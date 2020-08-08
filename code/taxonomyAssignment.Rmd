@@ -1,0 +1,133 @@
+---
+title: "Taxonomy Assignment"
+Author: "Sarah Lucas"
+---
+# Setup
+## Setup environment
+```{r}
+.cran_packages <- c("tidyverse", "gridExtra", "ips")
+.bioc_packages <- c("dada2", "phyloseq", "DECIPHER", "phangorn", "ShortRead"
+
+.inst <- .cran_packages %in% installed.packages()
+if(any(!.inst)) {
+   install.packages(.cran_packages[!.inst])
+}
+.inst <- .bioc_packages %in% installed.packages()
+if(any(!.inst)) {
+   BiocManager::install(.bioc_packages[!.inst], quietly = FALSE)
+}
+# Load packages into session, and print package version
+sapply(c(.cran_packages, .bioc_packages), require, character.only = TRUE)
+```
+
+```{r}
+seqtab <- readRDS(file = "16S_output/seqtab.rds")
+```
+
+# Assign Taxonomy 
+## SILVA train set
+Download the latest SILVA training sets here: https://benjjneb.github.io/dada2/training.html
+HOMD files are saved in the Training Set folder
+```{r}
+# Assign taxonomy SILVA Train Set
+# Change path of training set to wherever fasta file is located
+tax_silva <- assignTaxonomy(seqtab, "~/Documents/MICaB/Hunter_Lab/taxonomyTrainingSets/silva_nr_v132_train_set.fa.gz", multithread=TRUE)
+colnames(tax_silva) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
+```
+
+## Assign species from the SILVA dataset
+Here, allowMultiple is set to FALSE, meaning that the sequence must only have 1 exact match to be assigned to species level.
+```{r}
+## Add species assignment to taxonomy table: https://benjjneb.github.io/dada2/assign.html#species-assignment
+# Change path of training set to wherever fasta file is located
+tax_species_silva <- addSpecies(tax_silva, "~/Documents/MICaB/Hunter_Lab/taxonomyTrainingSets/silva_species_assignment_v132.fa.gz", 
+                                verbose=TRUE, 
+                                allowMultiple = FALSE)
+colnames(tax_species_silva)  <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+unname(head(tax_species_silva))
+```
+
+## Assign Species with HOMD train set
+Here, allowMultiple is set to FALSE, meaning that the sequence must only have 1 exact match to be assigned to species level.
+```{r}
+## Add species assignment to taxonomy table: https://benjjneb.github.io/dada2/assign.html#species-assignment
+tax_species_silva_HOMD <- addSpecies(tax_silva, "TaxonomyTrainingSets/HOMD_16S_rRNA_RefSeq_V15.1.p9_dada2_addspecies.fasta", 
+                                     verbose=TRUE, 
+                                     allowMultiple = FALSE)
+colnames(tax_species_silva_HOMD) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species_HOMD")
+unname(head(tax_species_silva_HOMD))
+```
+
+## Combine both species assignments
+I want to keep the SILVA assigned species, but then add the HOMD assigned species as well.
+```{r}
+#make rownames for ASVs for each species level taxa table
+tax_species_silva_df <- as.data.frame(tax_species_silva) %>%
+  rownames_to_column('ASV')
+tax_species_silva_df[tax_species_silva_df == "cf."] <- NA
+tax_species_silva_df[tax_species_silva_df == "sp."] <- NA
+dim(tax_species_silva_df)
+
+tax_species_silva_HOMD_df <- as.data.frame(tax_species_silva_HOMD) %>%
+  rownames_to_column('ASV')
+tax_species_silva_HOMD_df[tax_species_silva_HOMD_df == "cf."] <- NA
+tax_species_silva_HOMD_df[tax_species_silva_HOMD_df == "sp."] <- NA
+dim(tax_species_silva_HOMD_df)
+
+# Use a full join to keep all rows and all columns x and y; NA for not matching values.
+# by is set to ASV, Kingdom, Phylum, Class, Order, Family, Genus, so the join must match on all these levels.
+tax_species_silva_HOMD_df_join <- full_join(x = tax_species_silva_df, 
+                                            y = tax_species_silva_HOMD_df, 
+                                            by = c("ASV","Kingdom", "Phylum", "Class", "Order", "Family", "Genus"))
+dim(tax_species_silva_HOMD_df_join)
+```
+# Add a column to distinguish whether the species assignment came from SILVA, HOMD, or both
+```{r}
+tax_species_silva_HOMD_df_join <- tax_species_silva_HOMD_df_join %>%
+  mutate(DB = ifelse(!is.na(Species) & !is.na(Species_HOMD), "Both",
+                     ifelse(!is.na(Species), "SILVA",
+                            ifelse(!is.na(Species_HOMD), "HOMD", NA))))
+```
+
+```{r}
+HOMD <- filter(tax_species_silva_HOMD_df_join, DB == "HOMD")
+HOMD
+```
+
+```{r}
+# If there is no species assignment in the Species_SILVA column, check the Species_HOMD column. If the Species_HOMD column says NA or sp. assign NA.
+tax_species_silva_HOMD_df_join_newspecies <- tax_species_silva_HOMD_df_join %>%
+  mutate(SpeciesCombo = ifelse(!is.na(Species), as.character(Species), as.character(Species_HOMD))) %>%
+  select(ASV, Kingdom, Phylum, Class, Order, Family, Genus, SpeciesCombo, DB) %>%
+  dplyr::rename(Species = SpeciesCombo) %>%
+  column_to_rownames('ASV') %>%
+  as.matrix()
+```
+```{r}
+# Write to disk
+saveRDS(tax_species_silva_HOMD_df_join_newspecies, "16S_output/tax_species_final_silva_HOMD.rds")
+```
+
+# Evaluate Tax Addition using HOMD
+
+Make a table where the SILVA species assignment was NA, but the HOMD assignment was not. Count how many rows (ASVs).
+```{r}
+speciesCompare <- tax_species_silva_HOMD_df_join %>%
+  filter(is.na(Species) & !is.na(Species_HOMD))
+dim(speciesCompare)
+```
+
+How many rows were not NA in the Species column for the SILVA species dataframe?
+```{r}
+length(which(!is.na(tax_species_silva_df$Species)))
+```
+How many rows were not NA in the Species column for the HOMD species dataframe?
+```{r}
+length(which(!is.na(tax_species_silva_HOMD_df$Species_HOMD)))
+```
+Do these numbers remain consistent when the tables are joined together?
+```{r}
+length(which(!is.na(tax_species_silva_HOMD_df_join$Species)))
+length(which(!is.na(tax_species_silva_HOMD_df_join$Species_HOMD)))
+```
+Yes, they do.
