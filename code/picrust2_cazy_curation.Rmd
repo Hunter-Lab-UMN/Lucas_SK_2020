@@ -1,0 +1,329 @@
+---
+title: "CAZy Data Curation"
+output: html_notebook
+---
+
+# CAZy data curation
+
+## Goals:
+I would like to obtain a table of Enzyme Classes (ECs) and their corresponding CAZy Class assignments. This table will then be used to pull out ECs from the PICRUSt predicted table that belong to CAZy classes. Because my data is 16S-centric, I will reduce the data to just bacterial entries in the CAZy database by using NCBI batch entrez to filter out any non-bacterial accessions.
+
+## CAZy data acquisition (Downloaded on April 1, 2020)
+Get CAZy Enzyme Class definitions from dbCAN-seq server (parsed from CAZy.org)
+http://bcb.unl.edu/dbCAN2/download/Databases/  
+
+
+### CAZy Classes  
+This table contains descriptions for all the CAZy Classes.  
+```{r}
+CAZyClass <- read_csv("../data/picrust2/CAZyDB.07312019.fam-activities.csv", 
+                      skip = 1, col_names = "class") %>%
+  separate(col = class, into = c("class","description"), sep = "    ") %>%
+  mutate(description = str_trim(description))
+CAZyClass
+```
+
+### CAZy Proteins
+This table contains genbank accession number, corresponding EC number, and associated CAZy class.
+```{r}
+CAZyProteins <- read_delim("../data/picrust2/CAZyDB.07312019.fam.subfam.ec.txt", delim = "\t", col_names = c("class","genbank","ECnum")) %>%
+  separate(col=class, into = c("class","subclass"), sep = "_")
+```
+
+Add the CAZy class descriptions to the proteins table.
+```{r}
+CAZy <- left_join(CAZyProteins, CAZyClass, by = "class")
+length(unique(CAZy$genbank))
+length(unique(CAZy$ECnum))
+length(unique(CAZy$class))
+saveRDS(CAZy, "../data/picrust2/CAZy.rds")
+```
+This resulting dataframe "CAZy" contains all genbank accessions, their corresponding EC numbers, and the matched CAZy Classes. There is redundancy in the database in every column. A total of 27787 unique genbank accessions, 593 EC numbers, and 412 unique CAZy assignments.
+
+
+## Entrez CAZy Filtering
+
+I want to reduce this dataset to just accessions that belong to Bacteria.
+
+### 1. filtering the CAZy dataset to the individual classes. This is because th batch Entrez option at NCBI errors out when the dataset is too large (Max seems to be ~2000).
+```{r}
+CAZyAccessionsAA <- CAZy %>%
+  filter(grepl('^AA', class)) %>%
+  select(genbank) %>%
+  write_tsv("../data/picrust2/GenBankAcessions_AA.txt")
+CAZyAccessionsGH <- CAZy %>%
+  filter(grepl('^GH', class)) %>%
+  select(genbank) %>%
+  write_tsv("../data/picrust2/GenBankAcessions_GH.txt")
+CAZyAccessionsGT <- CAZy %>%
+  filter(grepl('^GT', class)) %>%
+  select(genbank) %>%
+  write_tsv("../data/picrust2/GenBankAcessions_GT.txt")
+CAZyAccessionsPL <- CAZy %>%
+  filter(grepl('^PL', class)) %>%
+  select(genbank) %>%
+  write_tsv("../data/picrust2/GenBankAcessions_PL.txt")
+CAZyAccessionsCE <- CAZy %>%
+  filter(grepl('^CE', class)) %>%
+  select(genbank) %>%
+  write_tsv("../data/picrust2/GenBankAcessions_CE.txt")
+CAZyAccessionsCBM <- CAZy %>%
+  filter(grepl('^CBM', class)) %>%
+  select(genbank) %>%
+  write_tsv("../data/picrust2/GenBankAcessions_CBM.txt")
+```
+The resulting files all have row numbers that add up to the total row numbers of the CAZy dataset, meaning we have captured all the data into these 6 categories. The total row number of each dataset adds up to the rownumber in the original dataframe
+
+### 2. Use the batch entrez search function with the list of accessions (https://www.ncbi.nlm.nih.gov/sites/batchentrez) to identify the genbank entries matching the accessions in the Protein database, then use the search filter parameters to reduce the list to just accessions that belong to Bacteria.
+
+#### Auxiliary Activities (AA)
+```{r}
+EntrezAA <- read_tsv("../data/picrust2/EntrezFiles/EntrezOutput/AA_accessions.txt", col_names = "genbank")
+EntrezAABacteria <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/EntrezBacterialAA.txt", col_names = "genbank")
+```
+Look for entries that are in EntrezAA but not CAZyAccessions.
+```{r}
+# Which CAZy AA accessions did not produce a result?
+anti_join(CAZyAccessionsAA, EntrezAA, by = "genbank")
+# How many unique AA accessions are in CAZyAccessionsAA?
+length(unique(CAZyAccessionsAA$genbank))
+length(unique(EntrezAABacteria$genbank))
+```
+3PPS_A for 333361328 which is a fungal laccase.  
+I see that although CAZyAccessionsAA had 335 entries, it only had 317 unique accessions, meaning that our Entrez search found all of them. The reason appears to be that in the CAZy protein dataframe, there can be multiple entries for the same gene because it can belong to multiple families. That's OK!
+
+Of the 317 unique accessions queried, 27 are of bacterial origin.
+
+#### Carbohydrate Esterases (CE)
+```{r}
+EntrezCE <- read_tsv("../data/picrust2/EntrezFiles/EntrezOutput/CE_accessions.txt", col_names = "genbank")
+EntrezCEBacteria <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/EntrezBacterialCE.txt", col_names = "genbank")
+```
+Look for entries that are in EntrezCE but not CAZyAccessions.
+```{r}
+# Which CAZy AA accessions did not produce a result?
+missingCE <- anti_join(CAZyAccessionsCE, EntrezCE, by = "genbank")
+# How many unique AA accessions are in CAZyAccessionsAA?
+length(CAZyAccessionsCE$genbank)
+length(unique(CAZyAccessionsCE$genbank))
+# Lets just have a list of unique identifiers
+EntrezCEBacteriaUnique <- EntrezCEBacteria %>% distinct(genbank, .keep_all = TRUE)
+```
+555 accessions were detected in the NCBI datase. Of those, 239 are of bacterial origin.  
+Just to make sure there are no duplicates in this data (there shouldn't have been because Entrez finds and gets rid them)
+```{r}
+# How many unique AA accessions are in EntrezCEBacteria?
+length(EntrezCEBacteria$genbank)
+length(unique(EntrezCEBacteria$genbank))
+# Lets just have a list of unique identifiers
+EntrezCEBacteriaUnique <- EntrezCEBacteria %>% distinct(genbank, .keep_all = TRUE)
+```
+
+#### Glycoside Hydrolases (GH)
+The CAZyAccessionsGH has 16164 entries. Entrez just times out with this many searches, so lets break it down into more manageable chunks
+```{r}
+# Accessions 1-2000
+CAZyAccessionsGH_2000 <- slice(CAZyAccessionsGH, 1:2000)
+write_csv(CAZyAccessionsGH_2000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_2000.txt")
+# Accessions 2001-4000
+CAZyAccessionsGH_4000 <- slice(CAZyAccessionsGH, 2001:4000)
+write_csv(CAZyAccessionsGH_4000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_4000.txt")
+# Accessions 4001-6000
+CAZyAccessionsGH_6000 <- slice(CAZyAccessionsGH, 4001:6000)
+write_csv(CAZyAccessionsGH_6000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_6000.txt")
+# Accessions 6001-8000
+CAZyAccessionsGH_8000 <- slice(CAZyAccessionsGH, 6001:8000)
+write_csv(CAZyAccessionsGH_8000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_8000.txt")
+# Accessions 8001-10000
+CAZyAccessionsGH_10000 <- slice(CAZyAccessionsGH, 8001:10000)
+write_csv(CAZyAccessionsGH_10000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_10000.txt")
+# Accessions 10001-12000
+CAZyAccessionsGH_12000 <- slice(CAZyAccessionsGH, 10001:12000)
+write_csv(CAZyAccessionsGH_12000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_12000.txt")
+# Accessions 12001-14000
+CAZyAccessionsGH_14000 <- slice(CAZyAccessionsGH, 12001:14000)
+write_csv(CAZyAccessionsGH_14000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_14000.txt")
+# Accessions 14001-16164
+CAZyAccessionsGH_16164 <- slice(CAZyAccessionsGH, 14001:16164)
+write_csv(CAZyAccessionsGH_16164, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_16164.txt")
+```
+Import bacteria specific entrez lists
+```{r}
+EntrezGHBacteria_2000 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/GH/EntrezBacterialGH_1-2000.txt", col_names = "genbank")
+EntrezGHBacteria_4000 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/GH/EntrezBacterialGH_2001-4000.txt", col_names = "genbank")
+EntrezGHBacteria_6000 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/GH/EntrezBacterialGH_4001-6000.txt", col_names = "genbank")
+EntrezGHBacteria_8000 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/GH/EntrezBacterialGH_6001-8000.txt", col_names = "genbank")
+EntrezGHBacteria_10000 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/GH/EntrezBacterialGH_8001-10000.txt", col_names = "genbank")
+EntrezGHBacteria_12000 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/GH/EntrezBacterialGH_10001-12000.txt", col_names = "genbank")
+EntrezGHBacteria_14000 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/GH/EntrezBacterialGH_12001-14000.txt", col_names = "genbank")
+EntrezGHBacteria_16164 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/GH/EntrezBacterialGH_14001-16164.txt", col_names = "genbank")
+EntrezGHBacteria <- bind_rows(EntrezGHBacteria_2000, 
+                              EntrezGHBacteria_4000, 
+                              EntrezGHBacteria_6000, 
+                              EntrezGHBacteria_8000, 
+                              EntrezGHBacteria_10000,
+                              EntrezGHBacteria_12000,
+                              EntrezGHBacteria_14000,
+                              EntrezGHBacteria_16164)
+```
+```{r}
+length(EntrezGHBacteria$genbank)
+length(unique(EntrezGHBacteria$genbank))
+```
+Ok, it looks like there are some duplicate genbank entries still in the Entrez filtered dataset Let's look at which ones those are:
+```{r}
+dupes <- EntrezGHBacteria %>% 
+  get_dupes(genbank)
+unique(dupes$genbank)
+```
+Each of the duplicate genes is counted twice, so 88 instances of duplicate genes is 44 genes. Duplicates could have happened when dplicate rows show up in different subsets that were passed to Entrez. That explains the discrepancy. I want to only have unique identifiers in this list, so going to get rid of duplicates in the column. We should end up with 6393 rows:
+
+```{r}
+EntrezGHBacteriaUnique <- EntrezGHBacteria %>% distinct(genbank, .keep_all = TRUE)
+```
+So this is our final list of bacterial accessions for the GH CAZy group. We went from 16,164 to 6393. Wow!
+
+#### GlycosylTransferases (GT)
+The CAZyAccessionsGH has 16164 entries. Entrez just times out with this many searches, so lets break it down into more manageable chunks
+```{r}
+# Accessions 1-2000
+CAZyAccessionsGT_2000 <- slice(CAZyAccessionsGT, 1:2000)
+write_csv(CAZyAccessionsGT_2000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_2000.txt")
+# Accessions 2001-4000
+CAZyAccessionsGT_4000 <- slice(CAZyAccessionsGT, 2001:4000)
+write_csv(CAZyAccessionsGT_4000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_4000.txt")
+# Accessions 4001-6000
+CAZyAccessionsGT_6000 <- slice(CAZyAccessionsGT, 4001:6000)
+write_csv(CAZyAccessionsGT_6000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_6000.txt")
+# Accessions 6001-8000
+CAZyAccessionsGT_8000 <- slice(CAZyAccessionsGT, 6001:8000)
+write_csv(CAZyAccessionsGT_8000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_8000.txt")
+# Accessions 8001-10000
+CAZyAccessionsGT_10000 <- slice(CAZyAccessionsGT, 8001:10072)
+write_csv(CAZyAccessionsGT_10000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_10000.txt")
+```
+import bacteria specific entrez lists
+```{r}
+EntrezGTBacteria_2000 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/GT/EntrezBacterialGT_1-2000.txt", col_names = "genbank")
+EntrezGTBacteria_4000 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/GT/EntrezBacterialGT_2001-4000.txt", col_names = "genbank")
+EntrezGTBacteria_6000 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/GT/EntrezBacterialGT_4001-6000.txt", col_names = "genbank")
+EntrezGTBacteria_8000 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/GT/EntrezBacterialGT_6001-8000.txt", col_names = "genbank")
+EntrezGTBacteria_10072 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/GT/EntrezBacterialGT_8001-10072.txt", col_names = "genbank")
+
+EntrezGTBacteria <- bind_rows(EntrezGTBacteria_2000, 
+                              EntrezGTBacteria_4000, 
+                              EntrezGTBacteria_6000, 
+                              EntrezGTBacteria_8000, 
+                              EntrezGTBacteria_10072
+                              )
+```
+```{r}
+length(EntrezGTBacteria$genbank)
+length(unique(EntrezGTBacteria$genbank))
+```
+Ok, it looks like there are some duplicate genbank entries still in the Entrez filtered dataset that could have ocurred just from splitting up the dataset. Let's look at which ones those are:
+```{r}
+dupes <- EntrezGTBacteria %>% 
+  get_dupes(genbank)
+unique(dupes$genbank)
+```
+There are 11 duplicated genes. Duplicates could have happened when duplicate rows show up in different subsets that were passed to Entrez. That explains the discrepancy and why they wouldn't be removed by the batch Entrez search. I want to only have unique identifiers in this list, so going to get rid of duplicates in the column. We should end up with 1272 rows:
+
+```{r}
+EntrezGTBacteriaUnique <- EntrezGTBacteria %>% distinct(genbank, .keep_all = TRUE)
+```
+So this is our final list of bacterial accessions for the GH CAZy group. We went from 10072 to 1272 Wow!
+
+#### Polysaccharide Lyases (PL)
+```{r}
+EntrezPLBacteria <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/EntrezBacterialPL.txt", col_names = "genbank")
+```
+```{r}
+length(EntrezPLBacteria$genbank)
+length(unique(EntrezPLBacteria$genbank))
+```
+No duplicates, which makes sense because Entrez gets rid of them. We reduced this dataset from 956 to 590 Accession numbers
+
+#### Carbohydrate Binding Modules (CBM)
+```{r}
+# Accessions 1-2000
+CAZyAccessionsCBM_2000 <- slice(CAZyAccessionsCBM, 1:2000)
+write_csv(CAZyAccessionsCBM_2000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_CBM_2000.txt")
+# Accessions 2001-4000
+CAZyAccessionsGT_4078 <- slice(CAZyAccessionsCBM, 2001:4078)
+write_csv(CAZyAccessionsGT_4078, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_CBM_4078.txt")
+```
+import bacteria specific entrez lists
+```{r}
+EntrezCBMBacteria_2000 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/EntrezBacterialCBM_1-2000.txt", col_names = "genbank")
+EntrezCBMBacteria_4078 <- read_tsv("../data/picrust2/EntrezFiles/EntrezBacterial/EntrezBacterialCBM_2001-4078.txt", col_names = "genbank")
+# Bind togetehr the two tables
+EntrezCBMBacteria <- bind_rows(EntrezCBMBacteria_2000, 
+                              EntrezCBMBacteria_4078
+                              )
+```
+```{r}
+length(EntrezCBMBacteria$genbank)
+length(unique(EntrezCBMBacteria$genbank))
+```
+Duplicates exist in our dataset.
+```{r}
+dupes <- EntrezCBMBacteria %>% 
+  get_dupes(genbank)
+length(unique(dupes$genbank))
+```
+There are 138 duplicated genes. Duplicates could have happened when duplicate rows show up in different subsets that were passed to Entrez.  I want to only have unique identifiers in this list, so going to get rid of duplicates in the column. We should end up with 1500 rows:
+
+```{r}
+EntrezCBMBacteriaUnique <- EntrezCBMBacteria %>% distinct(genbank, .keep_all = TRUE)
+```
+So this is our final list of bacterial accessions for the GH CAZy group. We went from 4078 to 1500 Wow!
+
+### 3. Final Bacteria-Specific CAZy Accessions Lists
+```{r}
+EntrezBacteria <- bind_rows(EntrezGTBacteriaUnique,
+                            EntrezGHBacteriaUnique,
+                            EntrezCBMBacteriaUnique,
+                            EntrezCEBacteriaUnique,
+                            EntrezPLBacteria,
+                            EntrezAABacteria)
+```
+Now look to see if there are any repeated accessions (Could have done this at the very beginning, but didn't think of it. Might have reduced the data quite significantly)
+```{r}
+length(EntrezBacteria$genbank)
+length(unique(EntrezBacteria$genbank))
+```
+Duplicates exist in our dataset.
+```{r}
+dupes <- EntrezBacteria %>% 
+  get_dupes(genbank)
+length(unique(dupes$genbank))
+```
+There are 1513 duplicated genes. We already got rid of duplicate accessions in our Entrez accession list by class. That means duplicates could happen when there is more than one CAZy class assignment to an accession number. I want to only have unique identifiers in this list so I can use it to filter the larger CAZy dataset, so going to get rid of duplicates in the column. We should end up with 8480 rows:
+```{r}
+EntrezBacteriaUnique <- EntrezBacteria %>% distinct(genbank, .keep_all = TRUE)
+length(EntrezBacteriaUnique$genbank)
+```
+So this is our final list of genbank accessions in the dbCAN dataset that belong to Bacteria. We can now use this list to filter the original CAZy dataset.
+
+### 4. Filter CAZy dataframe to only have Bacterial accession numbers
+```{r}
+CAZyBacteria <- dplyr::inner_join(CAZy, EntrezBacteriaUnique, by = "genbank")
+length(CAZyBacteria$genbank)
+length(unique(CAZyBacteria$genbank))
+length(unique(CAZyBacteria$class))
+length(unique(CAZyBacteria$ECnum))
+```
+This tells me that there are 10699 rows of Bacteria Specific CAZy genbank accessions, and 8480 unique genbank accessions. This makes sense, different proteins can belong to multiple CAZy groups. We see this to be true when we look at the duplicat accessions below. The genbank accessions belong to 308 unique CAZy classes, and 373 unique EC identifiers. 
+```{r}
+dupes <- CAZyBacteria %>% 
+  get_dupes(genbank)
+length(unique(dupes$genbank))
+head(unique(dupes$genbank))
+```
+
+Save CAZyBacteria
+```{r}
+saveRDS(CAZyBacteria, "picrust2_output/CAZyBacteria.rds")
+```
+

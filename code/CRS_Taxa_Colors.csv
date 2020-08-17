@@ -1,0 +1,26 @@
+Taxon,Color
+Actinobacteria,#FF0037
+Bacteroidetes,#009E73
+Epsilonbacteraeota,#56B4E9
+Firmicutes,#E69F00
+Fusobacteria,#F0E442
+Patescibacteria,#D55E00
+Proteobacteria,#0072B2
+Spirochaetes,#CC79A7
+Synergistetes,purple
+Tenericutes,black
+Verrucomicrobia,grey
+Streptococcus,#e69f00
+Pseudomonas,#0072b2
+Staphylococcus,#be6900
+Corynebacterium,#ff0037
+Moraxella,#55a0e4
+Fusobacterium,#F0E442
+Prevotella,#009e73
+Haemophilus,#8cd1ff
+Veillonella,#8d3900
+Serratia,#1a479e
+Rothia,#970323
+Cutibacterium,#79031D
+Dolosigranulum,#ffd047
+Other < 1%,lightgrey

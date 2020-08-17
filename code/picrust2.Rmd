@@ -1,25 +1,32 @@
 ---
 title: "picrust2"
-output: html_notebook
+Author: "Sarah Lucas"
 ---
 # Setup
 ```{r}
-library(dada2);packageVersion("dada2")
-library(phyloseq);packageVersion("phyloseq")
-library(tidyverse);packageVersion("tidyverse")
-library(biomformat);packageVersion("biomformat")
-library(phylotools);packageVersion("phylotools")
-library(exploratory);packageVersion("exploratory")
-library(naniar)
-library(janitor)
-library(cowplot)
-library(viridis)
-library(ggpubr)
+.cran_packages <- c("tidyverse","phylotools","naniar","janitor","cowplot","ggpubr")
+.bioc_packages <- c("phyloseq","dada2","biomformat")
+
+# Install CRAN packages (if not already installed)
+.inst <- .cran_packages %in% installed.packages()
+if (any(!.inst)){
+  install.packages(.cran_packages[!.inst],repos = "http://cran.rstudio.com/")
+}
+
+.inst <- .bioc_packages %in% installed.packages()
+if (any(!.inst)){
+   BiocManager::install(.bioc_packages[!.inst], quietly = FALSE)
+}
+
+# Load packages into session, and print package version
+sapply(c(.cran_packages, .bioc_packages), require, character.only = TRUE)
+sapply(c(.cran_packages, .bioc_packages), package.version)
 ```
 
+# Setup
 ## Import filtered sequence table from preprocessing.Rmd
 ```{r}
-data <- readRDS("../data/phyloseq_unsupervised_filtered_rare.rds")
+data <- readRDS("16S_output/phyloseq_unsupervised_filtered_rare.rds")
 data
 ```
 
@@ -27,7 +34,7 @@ data
 ```{r}
 metadata <- data.frame(sample_data(data)) %>%
   select(SAMPLE_NAME, SEQ_RUN_NAME_SHORT, DIAG_CRS, DEM_AGE, DEM_SEX, SNOT20_TOTAL, LABS_S_AUREUS, LABS_S_AUREUS_GROWTH)
-write_tsv(metadata, "../data/picrust2/metadata.tsv")
+write_tsv(metadata, "picrust2_output/metadata.tsv")
 ```
 
 ## Make table.biom
@@ -50,7 +57,6 @@ ASVdfShortNames <- ASVdf %>%
   
 length(unique(ASVdfShortNames$SHORTNAME))
 ```
-Cool, so there are 121 rows in our otu table, and 121 unique names in shortnames, so we are good to go.  
 Make it a matrix with shortnames as rownames
 ```{r}
 ASVmatShortNames <- ASVdfShortNames %>%
@@ -61,18 +67,25 @@ ASVmatShortNames <- ASVdfShortNames %>%
 save as a biom file
 ```{r}
 asv_biom <- make_biom(data=ASVmatShortNames)
-write_biom(asv_biom,"../data/picrust2/table.biom")
+write_biom(asv_biom,"picrust2_output/table.biom")
 ```
 
 ## Make ASV fasta file
 get data.frame with first column as SHORTNAME, and second column as ASV sequence. The names of the headers must be seq.name and seq.text. The resulting file will be called seqs.fna
 ```{r}
 fastaNames <- select(ASVdfShortNames, seq.name = SHORTNAME, seq.text = ASV)
-dat2fasta(fastaNames, outfile = "../data/picrust2/seqs.fna")
+dat2fasta(fastaNames, outfile = "picrust2_output/seqs.fna")
 ```
 
 # Run PICRUSt2 in Terminal 
-## (from https://github.com/picrust/picrust2/wiki/PICRUSt2-Tutorial-(v2.3.0-beta))
+## Installation 
+https://github.com/picrust/picrust2/wiki/Installation
+picrust2 was installed within bioconda and commands were executed in the picrust2 environment
+
+conda activate picrust2
+
+## Run Picrust2 
+from https://github.com/picrust/picrust2/wiki/PICRUSt2-Tutorial-(v2.3.0-beta)
 
 ### Make output folder in data/picrust and enter it
 mkdir picrust2_out_pipeline
@@ -106,17 +119,17 @@ add_descriptions.py -i pathways_out/path_abun_unstrat.tsv.gz -m METACYC \
 ## Normalized ASVs
 the ASV abundance table normalized by predicted 16S copy number.
 ```{r}
-seqtab_norm <- read_tsv("../data/picrust2/picrust2_out_pipeline/EC_metagenome_out/pred_metagenome_contrib.tsv.gz")
+seqtab_norm <- read_tsv("picrust2_output/picrust2_out_pipeline/EC_metagenome_out/pred_metagenome_contrib.tsv.gz")
 ```
 the mean NSTI value per sample (when taking into account the relative abundance of the ASVs). This file can be useful for identifying outlier samples in your dataset. In PICRUSt1 weighted NSTI values < 0.06 and > 0.15 were suggested as good and high, respectively. The cut-offs can be useful for getting a ball-park of how your samples compare to other datasets, but a weighted NSTI score > 0.15 does not necessarily mean that the predictions are meaningless.
 ```{r}
-weighted_nsti <- read_tsv("../data/picrust2/picrust2_out_pipeline/EC_metagenome_out/weighted_nsti.tsv.gz")
+weighted_nsti <- read_tsv("picrust2_output/picrust2_out_pipeline/EC_metagenome_out/weighted_nsti.tsv.gz")
 ```
 
 ## Predicted metagenome ECs
 unstratified (wide) table - overall EC number abundances per sample. Analogous to an ASV count table.
 ```{r}
-pred_meta_EC_unstrat <- read_tsv("../data/picrust2/picrust2_out_pipeline/EC_metagenome_out/pred_metagenome_unstrat_descrip.tsv.gz") %>%
+pred_meta_EC_unstrat <- read_tsv("picrust2_output/picrust2_out_pipeline/EC_metagenome_out/pred_metagenome_unstrat_descrip.tsv.gz") %>%
   separate(col = "function", into = c("EC", "ECnum"), sep = "(\\:)") %>%
   select(-EC)
 head(pred_meta_EC_unstrat)
@@ -133,7 +146,7 @@ A stratified (long) table in "contribution" format breaking down how the ASVs co
 * __taxon_function_abun__ - Multiplication of "taxon_abun" column by "genome_function_count" column.
 * __taxon_rel_function_abun__ - Multiplication of "taxon_rel_abun" column by "genome_function_count" column.
 ```{r}
-pred_meta_EC_contrib <- read_tsv("../data/picrust2/picrust2_out_pipeline/EC_metagenome_out/pred_metagenome_contrib.tsv.gz") %>%
+pred_meta_EC_contrib <- read_tsv("picrust2_output/picrust2_out_pipeline/EC_metagenome_out/pred_metagenome_contrib.tsv.gz") %>%
   separate(col = "function", into = c("EC", "ECnum"), sep = "(\\:)") %>%
   select(-EC)
 ```
@@ -231,7 +244,7 @@ Confirmed! We have all classes represented. http://www.cazy.org/search?page=rech
 
 Get sample metadata
 ```{r}
-metadata <- read_tsv("../data/picrust2/metadata.tsv")
+metadata <- read_tsv("picrust2_output/metadata.tsv")
 SAMPLE_DIAG <- select(metadata, SAMPLE_NAME, DIAG_CRS)
 ```
 
@@ -270,26 +283,16 @@ Notes: Filtering to the top taxa or not doesn't matter for the results, except t
 
 Table just for the top 10 genera in CRS? (Try without filtering the top genera) 
 ```{r}
-#top10CRSdf <- readRDS("../data/top10CRS.rds")
-#top10GeneraCRS <- unique(top10CRSdf$Genus)
-#top10GeneraCRS
-top10GeneraCRS <- c("Streptococcus","Pseudomonas","Staphylococcus","Corynebacterium","Prevotella","Moraxella","Fusobacterium", "Haemophilus","Enterobacteriaceae","Veillonella")
+top10TaxaCRS <- c("Streptococcus","Pseudomonas","Staphylococcus","Corynebacterium","Prevotella","Moraxella","Fusobacterium", "Haemophilus","Serratia","Veillonella")
 ```
 ```{r}
 pred_meta_EC_contrib_CAZy_top10CRS <- pred_meta_EC_contrib_CAZy %>%
   mutate(GenusFamily = ifelse(!is.na(Genus), Genus, Family)) %>%
   filter(DIAG_CRS == "CRS") %>%
-  filter(GenusFamily %in% top10GeneraCRS) %>%
+  filter(GenusFamily %in% top10TaxaCRS) %>%
   filter(!is.na(CAZyClass))
 ```
 
-
-```{r}
-#pred_meta_EC_contrib_CAZy_top10CRS <- pred_meta_EC_contrib_CAZy %>%
-#  filter(DIAG_CRS == "CRS") %>%
-#  #filter(Genus %in% top10GeneraCRS, ) %>%
-#  filter(!is.na(CAZyClass))
-```
 Now from the table with the top 10 taxa, filter the table to get the top 10 taxon relative functional abundance (taxon_rel_function_abun)
 ```{r}
 pred_meta_EC_contrib_CAZy_top10CRS_top10relabunfun <- pred_meta_EC_contrib_CAZy_top10CRS %>%
@@ -312,7 +315,7 @@ pred_meta_EC_contrib_CAZy_top10CRS_top10relabunfun_summary <- pred_meta_EC_contr
 # Get a list of ECdescriptions ordered by the median for plotting
 orderECsCRS <- unique(pred_meta_EC_contrib_CAZy_top10CRS_top10relabunfun_summary$ECdescription)
 ```
-### CAZy Class grid
+#### CAZy Class grid
 ```{r}
 CRStop10relabunfun_summary_long <- pred_meta_EC_contrib_CAZy_top10CRS_top10relabunfun_summary %>%
   pivot_longer(cols = c(GH, GT, CE, PL, AA), 
@@ -342,7 +345,7 @@ CRStop10CAZyClass <- ggplot(CRStop10relabunfun_summary_long, aes(x= CAZyClassSum
 CRStop10CAZyClass
 ```
 
-### Boxplot
+#### Boxplot
 ```{r}
 boxplotCRS <- ggboxplot(data = pred_meta_EC_contrib_CAZy_top10CRS_top10relabunfun_full, 
                      x = "ECdescription", 
@@ -366,10 +369,10 @@ boxplotCRS <- ggboxplot(data = pred_meta_EC_contrib_CAZy_top10CRS_top10relabunfu
 boxplotCRS
 ```
 
-### Contributing Taxa
+#### Contributing Taxa
 
 ```{r}
-bugcolors <- read_csv("../CRS_Taxa_Colors.csv")
+bugcolors <- read_csv("CRS_Taxa_Colors.csv")
 ```
 
 ```{r}
@@ -419,96 +422,91 @@ CRSgrid <- plot_grid(CRStop10CAZyClass,
 CRSgrid
 ```
 ```{r}
-ggsave(CRSgrid, filename = "../data/picrust2/figures/CRSTop10ComboTaxFilt.pdf",
+ggsave(CRSgrid, filename = "picrust2_output/figures/CRSTop10ComboTaxFilt.pdf",
        device = "pdf",
        height = 3,
        width = 8,
        useDingbats = FALSE)
 ```
 
-## CAZy Only - Non-CRS
+### CAZy Only - Non-CRS
 
-Table just for the top 10 genera in CRS? (Try without filtering the top genera)
+Table just for the top 10 genera in CRS? (Try without filtering the top genera) 
 ```{r}
-top10NonCRSdf <- readRDS("../data/top10NonCRS.rds")
-top10GeneraNonCRS <- unique(top10NonCRSdf$Genus)
-top10GeneraNonCRS
+top10TaxaNonCRS <- c("Moraxella","Staphylococcus","Corynebacterium","Streptococcus","Haemophilus","Veillonella","Prevotella","Cutibacterium","Fusobacteria","Rothia")
 ```
 ```{r}
-contrib_CAZy_top10NonCRS <- pred_meta_EC_contrib_CAZy %>%
+pred_meta_EC_contrib_CAZy_top10NonCRS <- pred_meta_EC_contrib_CAZy %>%
+  mutate(GenusFamily = ifelse(!is.na(Genus), Genus, Family)) %>%
   filter(DIAG_CRS == "Healthy") %>%
-  filter(Genus %in% top10GeneraNonCRS) %>%
+  filter(GenusFamily %in% top10TaxaNonCRS) %>%
   filter(!is.na(CAZyClass))
 ```
+
 Now from the table with the top 10 taxa, filter the table to get the top 10 taxon relative functional abundance (taxon_rel_function_abun)
 ```{r}
-contrib_CAZy_top10NonCRS_top10relabunfun <- contrib_CAZy_top10NonCRS %>%
+pred_meta_EC_contrib_CAZy_top10NonCRS_top10relabunfun <- pred_meta_EC_contrib_CAZy_top10NonCRS %>%
   group_by(ECnum) %>%
-  dplyr::summarize(avgTaxonRelFunAbun = mean(taxon_rel_function_abun)) %>%
+  dplyr::summarize(avgTaxonRelFunAbun = mean(taxon_rel_function_abun),
+            medTaxonRelFunAbun = median(taxon_rel_function_abun)
+            ) %>%
   top_n(avgTaxonRelFunAbun, n=20)
-
 # Get names of the top 10 ECs by average percent
-top10NonCRS_top10relabunfun_names <- unique(contrib_CAZy_top10NonCRS_top10relabunfun$ECnum)
+top10NonCRS_top10relabunfun_names <- unique(pred_meta_EC_contrib_CAZy_top10NonCRS_top10relabunfun$ECnum)
 # Use these names to go back to the original dataset and filter the ECnums
-contrib_CAZy_top10NonCRS_top10relabunfun_full <- contrib_CAZy_top10NonCRS %>%
+pred_meta_EC_contrib_CAZy_top10NonCRS_top10relabunfun_full <- pred_meta_EC_contrib_CAZy_top10NonCRS %>%
   filter(ECnum %in% top10NonCRS_top10relabunfun_names)
-
 # Make a summary of the top10 taxa
-contrib_CAZy_top10NonCRS_top10relabunfun_summary <- contrib_CAZy_top10NonCRS_top10relabunfun_full %>%
+pred_meta_EC_contrib_CAZy_top10NonCRS_top10relabunfun_summary <- pred_meta_EC_contrib_CAZy_top10NonCRS_top10relabunfun_full %>%
   group_by(ECnum, CAZyClass, ECdescription, GH, GT, CE, PL, AA) %>%
   dplyr::summarize(avgTaxonRelFunAbun = mean(taxon_rel_function_abun),
             medTaxonRelFunAbun = median(taxon_rel_function_abun)) %>%
   arrange(medTaxonRelFunAbun)
 # Get a list of ECdescriptions ordered by the median for plotting
-orderECsNonCRS <- unique(contrib_CAZy_top10NonCRS_top10relabunfun_summary$ECdescription)
+orderECsNonCRS <- unique(pred_meta_EC_contrib_CAZy_top10NonCRS_top10relabunfun_summary$ECdescription)
 ```
-### CAZy Class grid
+#### CAZy Class grid
 ```{r}
-NonCRStop10relabunfun_summary_long <- contrib_CAZy_top10NonCRS_top10relabunfun_summary %>%
+NonCRStop10relabunfun_summary_long <- pred_meta_EC_contrib_CAZy_top10NonCRS_top10relabunfun_summary %>%
   pivot_longer(cols = c(GH, GT, CE, PL, AA), 
                names_to = "CAZyClassSumm", 
                values_to = "BOO")
 ```
-```{r fig.height=5, fig.width=6}
+```{r}
 NonCRStop10CAZyClass <- ggplot(NonCRStop10relabunfun_summary_long, aes(x= CAZyClassSumm, y=ECdescription)) + 
   geom_tile(colour = "whitesmoke",size=.5, aes(fill = BOO)) +
-  #geom_point(aes(color = BOO)) + # Make the squares dots instead
   scale_x_discrete(expand = c(0,0)) + #Make the boxes square
   scale_y_discrete(breaks = orderECsNonCRS,
                    limits = orderECsNonCRS,
                    expand = c(0,0)) + #Make the boxes square
   coord_fixed(ratio=1) +  #Make the boxes square
   scale_fill_manual(values = c("white", "black")) +
-  #scale_fill_manual(values = c("white", "white")) + # Make the squares dots instead
-  #scale_color_manual(values = c("white", "black")) + # Make the squares dots instead
-  #theme_minimal(base_size = 10) + 
   theme_minimal(base_size = 9) +
   theme(legend.position = "",
-        axis.text.x = element_text(color = "black"),
+        axis.text.x = element_text(angle=90, hjust = 1, color = "black"),
         axis.text.y = element_text(color = "black"),
         axis.ticks = element_blank(),
         axis.title = element_blank(),
-        plot.margin = unit(c(0,0,0,0), "cm")
-        )
+        plot.margin = unit(c(0,0,0,0), "cm"))
 NonCRStop10CAZyClass
 ```
 
-### Boxplot
-```{r, fig.height=5, fig.width=6}
-boxplotNonCRS <- ggboxplot(data = contrib_CAZy_top10NonCRS_top10relabunfun_full, 
+#### Boxplot
+```{r}
+boxplotNonCRS <- ggboxplot(data = pred_meta_EC_contrib_CAZy_top10NonCRS_top10relabunfun_full, 
                      x = "ECdescription", 
                      y = "taxon_rel_function_abun",
                      fill = "DIAG_CRS",
                      #palette = "npg",
-                     order = orderECsNonCRS) + 
+                     order = orderECsNonCRS,
+                     notch=F) + 
   scale_y_log10(breaks = c(0.1,1,10,100),
                 labels = c("0.1","1","10","100")
                 ) +
   coord_flip() +
-  theme_pubclean(base_size = 9) +
   scale_fill_manual(values = "grey") +
-  theme(axis.text.x = element_text(color = "black"),
-        axis.title = element_blank(),
+  theme_pubclean(base_size = 9) +
+  theme(axis.title = element_blank(),
         #axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
         panel.grid.major.y = element_line(color = "black"),
@@ -517,33 +515,31 @@ boxplotNonCRS <- ggboxplot(data = contrib_CAZy_top10NonCRS_top10relabunfun_full,
 boxplotNonCRS
 ```
 
-
-### Contributing Taxa
+#### Contributing Taxa
 ```{r}
-NonCRSTop10Taxa <- contrib_CAZy_top10NonCRS_top10relabunfun_full %>%
-  select(ECnum, ECdescription, taxon_rel_abun, Kingdom, Phylum, Class, Order, Family, Genus, Species, TaxName) %>%
-  group_by(ECnum, ECdescription, Genus) %>%
+NonCRSTop10Taxa <- pred_meta_EC_contrib_CAZy_top10NonCRS_top10relabunfun_full %>%
+  select(ECnum, ECdescription, taxon_rel_abun, Kingdom, Phylum, Class, Order, Family, Genus, GenusFamily, Species, TaxName) %>%
+  group_by(ECnum, ECdescription, Phylum, GenusFamily, Genus) %>%
   dplyr::summarize(mean_taxon_rel_abun = mean(taxon_rel_abun)) %>%
   # Add plotting colors
-  left_join(bugcolors, by = c("Genus" = "Taxon"))
+  left_join(bugcolors, by = c("GenusFamily" = "Taxon"))
 ```
-Stacked bargraphs of taxa represented
+Make stacked barchart
 ```{r}
-colorTax <- unique(NonCRSTop10Taxa$Genus)
-colorHex <- unique(NonCRSTop10Taxa$Color)
+NonCRScolorTax <- unique(NonCRSTop10Taxa$GenusFamily)
+NonCRScolorHex <- unique(NonCRSTop10Taxa$Color)
 
 NonCRStop10Bar <- ggplot(NonCRSTop10Taxa, 
                       aes(x = ECdescription, 
                       y = mean_taxon_rel_abun,
-                      fill = Genus)) +
-  scale_fill_manual(breaks = colorTax, values = colorHex) +
+                      fill = GenusFamily)) +
   geom_bar(stat="identity", position="stack") +
   labs(x = "", y = "") +
+  scale_fill_manual(breaks = NonCRScolorTax, 
+                    values = NonCRScolorHex) +
+  coord_flip() +
   scale_x_discrete(breaks = orderECsNonCRS,
                    limits = orderECsNonCRS) +
-  scale_y_continuous(breaks = c(0,20,40,60,80),
-                   limits = c(0,80)) +
-  coord_flip() +
   theme_pubclean(base_size = 9) +
   theme(#axis.text.x = element_text(angle = 90, hjust = 1, size = 8),
         axis.title = element_blank(),
@@ -561,16 +557,16 @@ NonCRStop10Bar
 ```
 
 ```{r, fig.height=3.5, fig.width=10}
-NonCRS <- plot_grid(NonCRStop10CAZyClass, 
-                    boxplotNonCRS + theme(axis.text.y = element_blank()), 
-                    NonCRStop10Bar + theme(axis.text.y = element_blank()), 
-                    ncol = 3, rel_widths = c(1.5,.5,1))
-NonCRS
+NonCRSgrid <- plot_grid(NonCRStop10CAZyClass,
+                     boxplotNonCRS + theme(axis.text.y = element_blank()),
+                     NonCRStop10Bar + theme(axis.text.y = element_blank()), 
+                     ncol = 3, rel_widths = c(1.5,.5,1))
+NonCRSgrid
 ```
 ```{r}
-ggsave(NonCRS, filename = "../data/picrust2/figures/NonCRSTop10ComboTaxFilt.pdf",
+ggsave(NonCRSgrid, filename = "picrust2_output/figures/CRSTop10ComboTaxFilt.pdf",
        device = "pdf",
-       height = 3,
+      height = 3,
        width = 8,
        useDingbats = FALSE)
 ```

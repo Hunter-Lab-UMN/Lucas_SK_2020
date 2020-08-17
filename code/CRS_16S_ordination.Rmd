@@ -1,0 +1,193 @@
+---
+title: "Ordination Analysis"
+---
+# Setup
+```{r}
+library(phyloseq)
+library(tidyverse)
+```
+# Import filtered data
+```{r}
+filtPhyseq <- readRDS("16S_output/phyloseq_unsupervised_filtered_rare.rds")
+filtPhyseq
+summary(sample_sums(filtPhyseq))
+```
+
+# Transform dataset
+```{r}
+filtPhyseqProp <- transform_sample_counts(filtPhyseq, function(x){100 * x / sum(x)})
+filtPhyseqLog <- transform_sample_counts(filtPhyseq, function(x) log(1 + x))
+```
+
+# Ordination
+
+## Method Exploration
+Run through some quick ordination plots to look at different ordinations methods
+```{r}
+dist = "wunifrac"
+ord_meths = c("DCA", "CCA", "RDA", "DPCoA", "NMDS", "MDS")
+plist = plyr::llply(as.list(ord_meths), function(i, physeq, dist){
+        ordi = ordinate(physeq, method=i, distance=dist)
+        plot_ordination(physeq, ordi, "samples", color="DIAG_CRS")
+}, filtPhyseqLog, dist)
+```
+```{r}
+names(plist) <- ord_meths
+```
+```{r}
+pdataframe = plyr::ldply(plist, function(x){
+    df = x$data[, 1:2]
+    colnames(df) = c("Axis_1", "Axis_2")
+    return(cbind(df, x$data))
+})
+names(pdataframe)[1] = "method"
+```
+```{r}
+p = ggplot(pdataframe, aes(Axis_1, Axis_2, color=DIAG_CRS, fill=DIAG_CRS))
+p = p + geom_point(size=4) #+ geom_polygon()
+p = p + facet_wrap(~method, scales="free")
+p
+```
+
+## Double Principal Coordinates
+```{r, width = 8, height = 7}
+# DPCoA Ordination
+dpcoa_ordination <- ordinate(filtPhyseqLog, "DPCoA" ) 
+dpcoa_evals <- dpcoa_ordination$eig
+plot_scree(dpcoa_ordination)
+```
+```{r}
+# Plot DPCoA for samples
+dpcoa_ordination_plot_samples <- plot_ordination(filtPhyseqLog, dpcoa_ordination, 
+                                                 type = "samples", 
+                                                 color = "DIAG_CRS",
+                                                 #color = "DIAG_CRS"#, 
+                                                 shape = "DIAG_CRS",
+                                                 ) +
+  geom_point(alpha = 1, size = 3.5) +
+  scale_shape_manual(values = c(1,16)) +
+  scale_color_manual(values = c("black","black")) +
+  theme_classic() +
+  theme(
+    legend.position = "",
+    legend.text = element_text(color = "black"),
+    legend.title = element_blank(),
+    axis.line = element_blank(),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(color = "black", size = 14),
+    axis.title = element_text(color = "black", size = 16),
+    panel.border = element_rect(fill = "transparent", color = "black"),
+    panel.background = element_rect(fill = "transparent"), # bg of the panel
+    plot.background = element_rect(fill = "transparent", color = NA), # bg of the plot
+    panel.grid.major = element_line(color = "transparent"), # get rid of major grid
+    panel.grid.minor = element_line(color = "transparent"), # get rid of minor grid
+    legend.background = element_rect(fill = "transparent"), # get rid of legend bg
+    legend.box.background = element_rect(fill = "transparent", color = "transparent") # get rid of legend panel bg
+    ) +
+  guides(color = guide_legend(override.aes = list(fill="transparent"))) +
+  geom_hline(yintercept = 0.0, alpha = 1, linetype = 2, color = "black") +
+  geom_vline(xintercept = 0.0, alpha = 1, linetype = 2, color = "black")
+
+# Get rid of point within point
+dpcoa_ordination_plot_samples$layers <- dpcoa_ordination_plot_samples$layers[-1]
+dpcoa_ordination_plot_samples
+```
+```{r}
+phylum.colors <- c( "#de2d26", #Actino
+                   "#009E73", #Bacteroidetes
+                   "#56B4E9", #Epsiloniarchaeota
+                   "#E69F00", #Firmicutes
+                   "#F0E442", #Fusobacteria
+                   "#D55E00", #Pastesci
+                   "#0072B2", #Proteo
+                   "#CC79A7",  #Spirochaetes 
+                   "purple", #Synergestites
+                   "black", #Tenericutes
+                   "grey") #Verruco
+```
+
+```{r}
+# Plot DPCoA scores for taxa
+dpcoa_ordination_plot_taxa <- plot_ordination(filtPhyseqLog, dpcoa_ordination, 
+                                              type = "taxa", 
+                                              color = "Phylum") +
+  geom_point(alpha = 1, size = 3.5) +
+  scale_color_manual(values = phylum.colors) +
+  theme_classic() +
+  theme(
+    legend.position = "right",
+    legend.text = element_text(color = "black"),
+    legend.title = element_blank(),
+    axis.line = element_blank(),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(color = "black", size = 14),
+    axis.title = element_text(color = "black", size = 16),
+    panel.border = element_rect(fill = "transparent", color = "black"),
+    panel.background = element_rect(fill = "transparent"),
+    plot.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_line(color = "transparent"),
+    panel.grid.minor = element_line(color = "transparent"),
+    legend.background = element_rect(fill = "transparent"),
+    legend.box.background = element_rect(fill = "transparent", color = "transparent"),
+    ) +
+  guides(color = guide_legend(override.aes = list(fill="transparent"))) +
+  geom_hline(yintercept = 0.0, alpha = 1, linetype = 2, color = "black") +
+  geom_vline(xintercept = 0.0, alpha = 1, linetype = 2, color = "black")
+dpcoa_ordination_plot_taxa$layers <- dpcoa_ordination_plot_taxa$layers[-1]
+dpcoa_ordination_plot_taxa
+
+```
+
+```{r}
+biplot.colors <- c( "black", # Samples
+                    "#de2d26", #Actino
+                   "#009E73", #Bacteroidetes
+                   "#56B4E9", #Epsiloniarchaeota
+                   "#E69F00", #Firmicutes
+                   "#F0E442", #Fusobacteria
+                   "#D55E00", #Pastesci
+                   "#0072B2", #Proteo
+                   "#CC79A7",  #Spirochaetes 
+                   "purple", #Synergestites
+                   "pink", #Tenericutes
+                   "grey") #Verruco
+```
+
+```{r}
+# Plot DPCoA scores for taxa
+dpcoa_ordination_biplot <- plot_ordination(filtPhyseqLog, dpcoa_ordination, 
+                                              type = "biplot", 
+                                              color = "Phylum",
+                                           shape = "DIAG_CRS") +
+  geom_point(alpha = 1, size = 3) +
+  scale_shape_manual(values = c(4,21,19)) +
+  scale_color_manual(values = biplot.colors) +
+  theme_classic() +
+  theme(
+    legend.position = "right",
+    legend.text = element_text(color = "black"),
+    legend.title = element_blank(),
+    axis.line = element_blank(),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(color = "black"),
+    axis.title = element_text(color = "black"),
+    panel.border = element_rect(fill = "transparent", color = "black"),
+plot.margin = unit(c(0,0,0,0), "cm")) +
+  guides(#col = guide_legend(ncol = 1),
+         color = guide_legend(override.aes = list(fill="transparent"))) +
+  geom_hline(yintercept = 0.0, alpha = 1, linetype = 2, color = "black") +
+  geom_vline(xintercept = 0.0, alpha = 1, linetype = 2, color = "black") #+
+  #coord_fixed(sqrt(dpcoa_evals[2] / dpcoa_evals[1]))
+# Get rid of point within point
+dpcoa_ordination_biplot$layers <- dpcoa_ordination_biplot$layers[-1]
+dpcoa_ordination_biplot
+
+```
+```{r}
+ggsave(dpcoa_ordination_biplot, 
+       filename = "16S_output/figures/dpcoa-phylum-biplot.pdf",
+       device = "pdf",
+       height = 4.5,
+       width = 8,
+       useDingbats = FALSE)
+```

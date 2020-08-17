@@ -1,0 +1,332 @@
+---
+title: "Cutadapt primer trimming - CRS"
+---
+
+This is the analysis notebook for trimming primer sequences from V4 16S sequences generated at the University of Minnesota.
+
+# Load packages
+```{r}
+library(dada2)
+packageVersion("dada2")
+library(ShortRead)
+packageVersion("ShortRead")
+library(Biostrings)
+packageVersion("Biostrings")
+```
+
+# Install Cutadapt. 
+Guide: https://cutadapt.readthedocs.io/en/stable/installation.html
+After installing cutadapt, we need to tell R the path to the cutadapt command.
+```{r}
+cutadapt <- "/Users/sarahlucas/miniconda3/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
+system2(cutadapt, args = "--version") # Run shell commands from R
+```
+# Identify Primers
+```{r}
+FWD <- "GTGCCAGCMGCCGCGGTAA"
+REV <- "GGACTACHVGGGTWTCTAAT"
+```
+Ensure we have the right primers, and the correct orientation of the primers on the reads, we will verify the presence and orientation of these primers in the data.
+```{r}
+allOrients <- function(primer) {
+    # Create all orientations of the input sequence
+    require(Biostrings)
+    dna <- DNAString(primer)  # The Biostrings works w/ DNAString objects rather than character vectors
+    orients <- c(Forward = dna, Complement = complement(dna), Reverse = reverse(dna), 
+        RevComp = reverseComplement(dna))
+    return(sapply(orients, toString))  # Convert back to character vector
+}
+FWD.orients <- allOrients(FWD)
+REV.orients <- allOrients(REV)
+FWD.orients
+```
+
+# Set path for sequencing runs
+```{r}
+path1 <- "../data/16S/fastq/RUN1_AE51B"
+list.files(path1)
+path2 <- "../data/16S/fastq/RUN2_AH2MV" 
+list.files(path2)
+path3 <- "../data/16S/fastq/RUN3_AHFM2" 
+list.files(path3)
+path4 <- "../data/16S/fastq/RUN4_AN2A6" 
+list.files(path4)
+path5 <- "../data/16S/fastq/RUN5_CCVK7" 
+list.files(path5)
+path6 <- "../data/16S/fastq/RUN6_BWTM2"
+list.files(path6)
+```
+# Define seqs
+```{r}
+fnFs1 <- sort(list.files(path1, pattern = "_R1_001.fastq.gz", full.names = TRUE))
+fnRs1 <- sort(list.files(path1, pattern = "_R2_001.fastq.gz", full.names = TRUE))
+# Run 2
+fnFs2 <- sort(list.files(path2, pattern = "_R1_001.fastq.gz", full.names = TRUE))
+fnRs2 <- sort(list.files(path2, pattern = "_R2_001.fastq.gz", full.names = TRUE))
+# Run 3
+fnFs3 <- sort(list.files(path3, pattern = "_R1_001.fastq.gz", full.names = TRUE))
+fnRs3 <- sort(list.files(path3, pattern = "_R2_001.fastq.gz", full.names = TRUE))
+# Run 4
+fnFs4 <- sort(list.files(path4, pattern = "_R1_001.fastq.gz", full.names = TRUE))
+fnRs4 <- sort(list.files(path4, pattern = "_R2_001.fastq.gz", full.names = TRUE))
+# Run 5
+fnFs5 <- sort(list.files(path5, pattern = "_R1_001.fastq.gz", full.names = TRUE))
+fnRs5 <- sort(list.files(path5, pattern = "_R2_001.fastq.gz", full.names = TRUE))
+# Run 6
+fnFs6 <- sort(list.files(path6, pattern = "_R1_001.fastq.gz", full.names = TRUE))
+fnRs6 <- sort(list.files(path6, pattern = "_R2_001.fastq.gz", full.names = TRUE))
+```
+
+# Remove ambiguous seqs in sequence runs
+The presence of ambiguous bases (Ns) in the sequencing reads makes accurate mapping of short primer sequences difficult. Next we are going to “pre-filter” the sequences just to remove those with Ns, but perform no other filtering.
+```{r}
+# Run 1 (AE51B)
+fnFs.filtN1 <- file.path(path1, "filtN", basename(fnFs1)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN1 <- file.path(path1, "filtN", basename(fnRs1))
+filterAndTrim(fnFs1, fnFs.filtN1, fnRs1, fnRs.filtN1, maxN = 0, multithread = TRUE)
+# Run 2 (AH2MV)
+fnFs.filtN2 <- file.path(path2, "filtN", basename(fnFs2)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN2 <- file.path(path2, "filtN", basename(fnRs2))
+filterAndTrim(fnFs2, fnFs.filtN2, fnRs2, fnRs.filtN2, maxN = 0, multithread = TRUE)
+# Run 3 (AHFM2)
+fnFs.filtN3 <- file.path(path3, "filtN", basename(fnFs3)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN3 <- file.path(path3, "filtN", basename(fnRs3))
+filterAndTrim(fnFs3, fnFs.filtN3, fnRs3, fnRs.filtN3, maxN = 0, multithread = TRUE)
+# Run 4 (AN2A6)
+fnFs.filtN4 <- file.path(path4, "filtN", basename(fnFs4)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN4 <- file.path(path4, "filtN", basename(fnRs4))
+filterAndTrim(fnFs4, fnFs.filtN4, fnRs4, fnRs.filtN4, maxN = 0, multithread = TRUE)
+# Run 5 (CCVK7)
+fnFs.filtN5 <- file.path(path5, "filtN", basename(fnFs5)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN5 <- file.path(path5, "filtN", basename(fnRs5))
+filterAndTrim(fnFs5, fnFs.filtN5, fnRs5, fnRs.filtN5, maxN = 0, multithread = TRUE)
+# Run 6 (BWTM2)
+fnFs.filtN6 <- file.path(path6, "filtN", basename(fnFs6)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN6 <- file.path(path6, "filtN", basename(fnRs6))
+filterAndTrim(fnFs6, fnFs.filtN6, fnRs6, fnRs.filtN6, maxN = 0, multithread = TRUE)
+```
+
+# Check primer orientation
+We are now ready to count the number of times the primers appear in the forward and reverse read, while considering all possible primer orientations. Identifying and counting the primers on one set of paired end FASTQ files is sufficient, assuming all the files were created using the same library preparation, so we’ll just process the first sample.
+
+```{r}
+primerHits <- function(primer, fn) {
+    # Counts number of reads in which the primer is found
+    nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+    return(sum(nhits > 0))
+}
+```
+## Run 1
+```{r}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN1[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN1[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN1[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN1[[1]]))
+```
+## Run 2
+```{r}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN2[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN2[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN2[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN2[[1]]))
+```
+## Run 3
+```{r}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN3[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN3[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN3[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN3[[1]]))
+```
+## Run 4
+```{r}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN4[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN4[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN4[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN4[[1]]))
+```
+## Run 5
+```{r}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN5[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN5[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN5[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN5[[1]]))
+```
+## Run 6
+```{r}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN6[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN6[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN6[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN6[[1]]))
+```
+
+As expected, the FWD primer is found in the forward reads in its forward orientation, and in some of the reverse reads in its reverse-complement orientation. Similarly the REV primer is found with its expected orientations.
+
+Note: Orientation mixups are a common trip-up. If, for example, the REV primer is matching the Reverse reads in its RevComp orientation, then replace REV with its reverse-complement orientation (REV <- REV.orient[["RevComp"]]) before proceeding.
+
+# Remove Primers
+These primers can be now removed using a specialized primer/adapter removal tool. Here, we use cutadapt for this purpose. Download, installation and usage instructions are available online: http://cutadapt.readthedocs.io/en/stable/index.html
+
+We now create output filenames for the cutadapt-ed files, and define the parameters we are going to give the cutadapt command. The critical parameters are the primers, and they need to be in the right orientation, i.e. the FWD primer should have been matching the forward-reads in its forward orientation, and the REV primer should have been matching the reverse-reads in its forward orientation. Warning: A lot of output will be written to the screen by cutadapt!
+```{r}
+# Run 1
+path.cut1 <- file.path(path1, "cutadapt")
+if(!dir.exists(path.cut1)) dir.create(path.cut1)
+fnFs.cut1 <- file.path(path.cut1, basename(fnFs1))
+fnRs.cut1 <- file.path(path.cut1, basename(fnRs1))
+# Run2
+path.cut2 <- file.path(path2, "cutadapt")
+if(!dir.exists(path.cut2)) dir.create(path.cut2)
+fnFs.cut2 <- file.path(path.cut2, basename(fnFs2))
+fnRs.cut2 <- file.path(path.cut2, basename(fnRs2))
+# Run 3
+path.cut3 <- file.path(path3, "cutadapt")
+if(!dir.exists(path.cut3)) dir.create(path.cut3)
+fnFs.cut3 <- file.path(path.cut3, basename(fnFs3))
+fnRs.cut3 <- file.path(path.cut3, basename(fnRs3))
+# Run 4
+path.cut4 <- file.path(path4, "cutadapt")
+if(!dir.exists(path.cut4)) dir.create(path.cut4)
+fnFs.cut4 <- file.path(path.cut4, basename(fnFs4))
+fnRs.cut4 <- file.path(path.cut4, basename(fnRs4))
+# Run 5
+path.cut5 <- file.path(path5, "cutadapt")
+if(!dir.exists(path.cut5)) dir.create(path.cut5)
+fnFs.cut5 <- file.path(path.cut5, basename(fnFs5))
+fnRs.cut5 <- file.path(path.cut5, basename(fnRs5))
+# Run 6
+path.cut6 <- file.path(path6, "cutadapt")
+if(!dir.exists(path.cut6)) dir.create(path.cut6)
+fnFs.cut6 <- file.path(path.cut6, basename(fnFs6))
+fnRs.cut6 <- file.path(path.cut6, basename(fnRs6))
+
+```
+
+## Define cutadapt options
+```{r}
+FWD.RC <- dada2:::rc(FWD)
+REV.RC <- dada2:::rc(REV)
+# Trim FWD and the reverse-complement of REV off of R1 (forward reads)
+R1.flags <- paste("-g", FWD, "-a", REV.RC) 
+# Trim REV and the reverse-complement of FWD off of R2 (reverse reads)
+R2.flags <- paste("-G", REV, "-A", FWD.RC) 
+```
+
+## Run 1
+### Run cutadapt
+```{r}
+for(i in seq_along(fnFs1)) {
+  system2(cutadapt, args = c(R1.flags, R2.flags, "-n", 2, # -n 2 required to remove FWD and REV from reads
+                             "-o", fnFs.cut1[i], "-p", fnRs.cut1[i], # output files
+                             "-m", 215, "-M", 285, # min/Max length cutoff
+                             fnFs.filtN1[i], fnRs.filtN1[i])) # input files
+}
+```
+### Check primer cut
+As a sanity check, we will count the presence of primers in the first cutadapt-ed sample:
+```{r}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut1[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut1[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut1[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut1[[1]]))
+```
+Success! Primers are no longer detected in the cutadapted reads.
+
+## Run 2
+### Run cutadapt
+```{r}
+for(i in seq_along(fnFs2)) {
+  system2(cutadapt, args = c(R1.flags, R2.flags, "-n", 2, # -n 2 required to remove FWD and REV from reads
+                             "-o", fnFs.cut2[i], "-p", fnRs.cut2[i], # output files
+                             "-m", 215, "-M", 285, # min/Max length cutoff
+                             fnFs.filtN2[i], fnRs.filtN2[i])) # input files
+}
+```
+### Check primer cut
+As a sanity check, we will count the presence of primers in the first cutadapt-ed sample:
+```{r}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut2[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut2[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut2[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut2[[1]]))
+```
+Success! Primers are no longer detected in the cutadapted reads.
+
+## Run 3
+### Run cutadapt
+```{r}
+for(i in seq_along(fnFs3)) {
+  system2(cutadapt, args = c(R1.flags, R2.flags, "-n", 2, # -n 2 required to remove FWD and REV from reads
+                             "-o", fnFs.cut3[i], "-p", fnRs.cut3[i], # output files
+                             "-m", 215, "-M", 285, # min/Max length cutoff
+                             fnFs.filtN3[i], fnRs.filtN3[i])) # input files
+}
+```
+### Check primer cut
+As a sanity check, we will count the presence of primers in the first cutadapt-ed sample:
+```{r}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut3[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut3[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut3[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut3[[1]]))
+```
+Success! Primers are no longer detected in the cutadapted reads.
+
+## Run 4
+### Run cutadapt
+```{r}
+for(i in seq_along(fnFs4)) {
+  system2(cutadapt, args = c(R1.flags, R2.flags, "-n", 2, # -n 2 required to remove FWD and REV from reads
+                             "-o", fnFs.cut4[i], "-p", fnRs.cut4[i], # output files
+                             "-m", 215, "-M", 285, # min/Max length cutoff
+                             fnFs.filtN4[i], fnRs.filtN4[i])) # input files
+}
+```
+### Check primer cut
+As a sanity check, we will count the presence of primers in the first cutadapt-ed sample:
+```{r}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut4[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut4[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut4[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut4[[1]]))
+```
+Success! Primers are no longer detected in the cutadapted reads.
+
+## Run 5
+### Run cutadapt
+```{r}
+for(i in seq_along(fnFs5)) {
+  system2(cutadapt, args = c(R1.flags, R2.flags, "-n", 2, # -n 2 required to remove FWD and REV from reads
+                             "-o", fnFs.cut5[i], "-p", fnRs.cut5[i], # output files
+                             "-m", 215, "-M", 285, # min/Max length cutoff
+                             fnFs.filtN5[i], fnRs.filtN5[i])) # input files
+}
+```
+### Check primer cut
+As a sanity check, we will count the presence of primers in the first cutadapt-ed sample:
+```{r}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut5[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut5[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut5[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut5[[1]]))
+```
+Success! Primers are no longer detected in the cutadapted reads.
+
+## Run 6
+### Run cutadapt
+```{r}
+for(i in seq_along(fnFs6)) {
+  system2(cutadapt, args = c(R1.flags, R2.flags, "-n", 2, # -n 2 required to remove FWD and REV from reads
+                             "-o", fnFs.cut6[i], "-p", fnRs.cut6[i], # output files
+                             "-m", 215, "-M", 285, # min/Max length cutoff
+                             fnFs.filtN6[i], fnRs.filtN6[i])) # input files
+}
+```
+### Check primer cut
+As a sanity check, we will count the presence of primers in the first cutadapt-ed sample:
+```{r}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut6[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut6[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut6[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut6[[1]]))
+```
+Success! Primers are no longer detected in the cutadapted reads.

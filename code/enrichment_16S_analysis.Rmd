@@ -1,0 +1,454 @@
+---
+title: "FESS MMM Enrichment Phyloseq"
+author: "Sarah Lucas"
+---
+
+# Set up
+```{r}
+.cran_packages <- c("tidyverse","gridExtra", "ggthemes",
+                    "ggpubr", "naniar", "scales","ampvis2")
+.bioc_packages <- c("phyloseq","Biobase")
+
+# Install CRAN packages (if not already installed)
+.inst <- .cran_packages %in% installed.packages()
+if (any(!.inst)){
+  install.packages(.cran_packages[!.inst],repos = "http://cran.rstudio.com/")
+}
+
+.inst <- .bioc_packages %in% installed.packages()
+if(any(!.inst)) {
+   BiocManager::install(.bioc_packages[!.inst], quietly = FALSE)
+}
+
+# Load packages into session, and print package version
+sapply(c(.cran_packages, .bioc_packages), require, character.only = TRUE)
+sapply(c(.cran_packages, .bioc_packages), package.version)
+```
+
+# Load in data
+Load in all components created in the DADA2 analysis and the sample sheet
+```{r}
+samdf <- readRDS("../data/16S/samdf_LucasSK_2020.rds")
+samdf <- data.frame(samdf)
+rownames(samdf) <- samdf$SAMPLE_NAME #because R - dplyr will not like making rownames, but it's fine for now.
+# seqtab is the sample:ASV table made in DADA2 - it should contain all samples and ASVs
+seqtab <- readRDS("16S_output/seqtab.rds")
+# Table with all ASVs and assigned taxonomy using the SILVA database (Greengenes and RDP also available)
+taxtab <- readRDS("16S_output/tax_species_final_silva_HOMD.rds")
+# Phylogenetic tree made using DECIPHER and Phangorn - import object and pull tree from the fitGTR
+fitGTR <- readRDS("16S_output/fitGTR.rds")
+```
+
+## Make a phyloseq object
+```{r}
+library(phyloseq)
+ps <- phyloseq(otu_table(seqtab, taxa_are_rows=FALSE), 
+               sample_data(samdf), 
+               tax_table(taxtab),
+               phy_tree(fitGTR$tree)
+)
+ps
+```
+## Adjust taxonomy levels
+Add a new taxonomy level called TaxName, which ensures that no ASV is NA in downstream plots
+```{r}
+tax.PHYSEQ <-  data.frame(tax_table(ps)) %>%
+  rownames_to_column('ASV') %>%
+  #Now getting into formatting the taxa so it looks nice and informative in plots
+  mutate(Genus_Species = ifelse(!is.na(Species), 
+                                str_c(Genus, Species, sep = " "), as.character(Genus))) %>%
+  mutate(Genus_Family = ifelse(!is.na(Genus), as.character(Genus), as.character(Family))) %>%
+  select(ASV, Kingdom, Phylum, Class, Order, Family, Genus, Species, Genus_Family, Genus_Species, DB)
+# Get rid of any extra notation in the taxonomy names.
+tax.PHYSEQ <- data.frame(lapply(tax.PHYSEQ, function(x) {
+  gsub("_[0-9]", "", x)
+}))
+
+# Make it a matrix again
+tax.PHYSEQ <- tax.PHYSEQ %>%
+  column_to_rownames('ASV') %>%
+  as.matrix()
+tax_table(ps) <- tax.PHYSEQ
+ps
+```
+Filter samples to just include (1) Enrichment experiment samples, (2) Enrichment experiment samples with further experiments for paper
+```{r}
+enrich <- subset_samples(ps, grepl("enrichment", PROJECT, ignore.case = TRUE) & # just keep sample pairs from enrichments
+                           !SAMPLE_TYPE == "control" & # remove sequence control samples
+                           !is.na(ENRICH_PUB_LETTER)) %>% # keep only samples used in pub
+  filter_taxa(., function(x) sum(x) > 0, TRUE) # Remove seqs that have no counts
+  
+enrich
+```
+
+Read Summary
+```{r}
+summary(sample_sums(enrich))
+```
+
+# Data Pre-processing
+
+## Supervised Prevalence Filtering - Filter out any taxa that have an unassigned phylum - those aren't really useful to us.
+```{r}
+#Only want Bacterial Seqs, no chloroplast DNA, no mitochondrial DNA
+filterKingdom = c("Archaea", "Eukaryota")
+filterOrder = "Chloroplast" ##Chloroplast DNA
+filterFamily = "Mitochondria" ## Mitochonidrial DNA
+
+#filter features with an ambiguous phylum annotation.
+enrich.super <- subset_taxa(enrich, !is.na(Phylum) &
+    !Phylum %in% c("", "uncharacterized", "Unknown_Phylum") &
+    !Kingdom %in% filterKingdom &
+    !Order %in% filterOrder &
+    !Family %in% filterFamily
+)
+enrich.super
+```
+## Calculate feature prevalence
+A useful next step is to explore feature prevalence in the dataset, which we will define here as the number of samples in which a taxa appears at least once.
+```{r}
+# Compute prevalence of each feature, store as data.frame
+prevdf = apply(
+  X = otu_table(enrich.super),
+  MARGIN = ifelse(taxa_are_rows(enrich.super), yes = 1, no = 2),
+  FUN = function(x) {
+    sum(x > 0)
+  }
+)
+# Add taxonomy and total read counts to this data.frame
+prevdf = data.frame(Prevalence = prevdf,
+                    TotalAbundance = taxa_sums(enrich.super),
+                    tax_table(enrich.super))
+```
+Take a look graphically at the distribution of taxa among the different phyla:
+```{r}
+# Subset to the remaining phyla after initial filtering
+prevdf.pv.phylum <- subset(prevdf, Phylum %in% get_taxa_unique(enrich.super, "Phylum"))
+ggplot(prevdf.pv.phylum,
+       aes(TotalAbundance, Prevalence / nsamples(enrich.super), color = Phylum)) +
+  # Include a guess for filtering parameter at 0.02
+  geom_hline(yintercept = 0.02,
+             alpha = 0.5,
+             linetype = 2) + 
+  geom_point(size = 2, alpha = 0.7) +
+  scale_x_log10() +  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
+  theme(text = element_text(size = 10)) +
+  facet_wrap( ~ Phylum) + theme(legend.position = "none")
+```
+## Are there phyla that are comprised of mostly low-prevalence features? Compute the total and average prevalences of the features in each phylum:
+```{r}
+#just look at phylum
+prevdf.phylum <- plyr::ddply(prevdf, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})
+colnames(prevdf.phylum)[2] <- "mean_feature_prevalence"
+colnames(prevdf.phylum)[3] <- "total_feature_prevalence"
+prevdf.phylum
+```
+Yes. Looks like there are some phyla that have quite low prevalence. Let's filter out any fatures belonging to phyla that have an average prevalence of just 1, or have less than 10 features:
+```{r}
+prevdf.phylum.filt <- filter(prevdf.phylum, mean_feature_prevalence <= 1 | total_feature_prevalence < 10)
+prevdf.phylum.filt
+```
+Remove the features belonging to these phyla in prevdf.phylum.filt from the dataset, creating ps.pv.2
+```{r}
+# Filter low prevalence samples (supervised - you made this decision by looking at your data)
+# Define phyla to filter - Here I have chosen those phyla that have an average prevalence of 1 OR have a total number of features less than 10.
+filterPhyla = unique(prevdf.phylum.filt$Phylum)
+filterPhyla
+# Filter entries with unidentified Phylum.
+enrich.super <- subset_taxa(enrich.super, !Phylum %in% filterPhyla)
+enrich.super
+#tax.CRS.pv.2 <- data.frame(tax_table(CRS.pv.2))
+```
+
+## Unsupervised Prevalence Filtering
+```{r}
+#  Define prevalence threshold as % of total samples
+prevalenceThreshold = 1
+prevalenceThreshold
+
+# Execute prevalence filter, using `prune_taxa()` function
+keepTaxa <-  rownames(prevdf)[(prevdf$Prevalence >= prevalenceThreshold)]
+enrich.unsuper <- prune_taxa(keepTaxa, enrich.super)
+enrich.unsuper
+```
+No difference there, as expected. All taxa in the dataset should belong to at least one sample.
+
+abundance filtering:
+```{r}
+enrich.unsuper.prop <- transform_sample_counts(enrich.unsuper, function(x){x / sum(x)})
+```
+
+Filter out taxa with less than .0001 relative abundance
+```{r}
+abundanceThreshold <- .0001
+enrich.unsuper.prop.filt <- filter_taxa(enrich.unsuper.prop, function(x) mean(x) > abundanceThreshold, TRUE)
+enrich.unsuper.prop.filt
+keepTaxaRelAbund <- taxa_names(enrich.unsuper.prop.filt)
+
+#keepTaxaAbund <-  rownames(prevdf3)[(prevdf3$TotalAbundance >= abundanceThreshold)]
+enrich.unsuper <- prune_taxa(keepTaxaRelAbund, enrich.unsuper)
+enrich.unsuper
+```
+
+```{r}
+summary(sample_sums(enrich.unsuper))
+```
+```{r}
+which(!rowSums(otu_table(enrich.unsuper)) > 2000)
+seqThreshold <- 2000
+#ps.pv.unsuper.prevfilt.taxfilt2000 <- prune_samples(sample_sums(ps.pv.unsuper.prevfilt.taxfilt) > seqThreshold, ps.pv.unsuper.prevfilt.taxfilt)
+#ps.pv.unsuper.prevfilt.taxfilt2000
+```
+There are two samples that fall well below our 2000 read cutoff. For the sake of comparison, keep these samples in and explain in the text that they are below the expected quality.
+
+Final prevalence/abundance analysis
+```{r}
+# Compute prevalence of each feature, store as data.frame
+prevdf.filt = apply(X = otu_table(enrich.unsuper),
+                    MARGIN = ifelse(taxa_are_rows(enrich.unsuper), yes = 1, no = 2),
+                    FUN = function(x){sum(x > 0)})
+# Add taxonomy and total read counts to this data.frame
+prevdf.filt = data.frame(Prevalence = prevdf.filt,
+                         TotalAbundance = taxa_sums(enrich.unsuper),
+                         tax_table(enrich.unsuper))
+```
+
+Take a look graphically at the distribution of taxa among the different phyla:
+```{r}
+# Subset to the remaining phyla after initial filtering
+prevdf.filt.phylum = subset(prevdf.filt, Phylum %in% get_taxa_unique(enrich.unsuper, "Phylum"))
+ggplot(prevdf.filt.phylum, aes(TotalAbundance, Prevalence / nsamples(enrich.unsuper),color=Phylum)) +
+  # Include a guess for filtering parameter at 0.02
+  geom_hline(yintercept = 0.02, alpha = 0.5, linetype = 2) + geom_point(size = 2, alpha = 0.7) +
+  scale_x_log10() +  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
+  theme(text = element_text(size=10)) +
+  facet_wrap(~Phylum) + theme(legend.position="none")
+```
+
+
+# Abundance Analysis
+
+## Top Genera
+```{r}
+original <- subset_samples(enrich.unsuper, SAMPLE_TYPE == "FESS") 
+enrich <- subset_samples(enrich.unsuper, SAMPLE_TYPE == "Enrichment") 
+```
+
+What are the taxa making up most of the reads in each group - the original samples and the enrichment samples
+```{r}
+#what are the abundance levels of each genus?
+original.genus <- tax_glom(original, taxrank="Genus")
+tax.count.ori <- data.frame(tax_table(original.genus)[,2:6], taxa_sums(original.genus))
+rownames(tax.count.ori) = NULL
+colnames(tax.count.ori) <- c("Phylum","Class","Order","Family","Genus", "Abundance")
+tax.count.ori$Percent <- round(tax.count.ori$Abundance/sum(tax.count.ori$Abundance)*100, 4)
+Genus_df_ori <- tax.count.ori[with(tax.count.ori, order(-Percent)), ] 
+
+#how much do the top 10 genera contribute to total abundance?
+top10GeneraOri <- Genus_df_ori[1:10, ]
+round(sum(top10GeneraOri$Percent),3)
+```
+```{r}
+###How diverse are the top 10 genera? i.e., how many species are there per genus?
+top10GeneraOri <- as.vector(Genus_df_ori$Genus[1:10])
+Diversity.list.ori <- vector("list", 10)
+names(Diversity.list.ori) <- top10GeneraOri
+
+for (i in 1:length(top10GeneraOri)) {
+  physub = subset_taxa(original, Genus == top10GeneraOri[i])
+  physub = prune_taxa(taxa_sums(physub) > 0, physub)
+  Diversity.list.ori[[i]] <- physub
+}
+
+#compute the number of taxa in each element of the list
+NtaxaOri <- data.frame(unlist(lapply(Diversity.list.ori, ntaxa)))
+
+colnames(NtaxaOri) <- "N.Species"
+#Make a table with percent abundance and number of taxa
+genus.tab.ori <- data.frame(Genus_df_ori[1:10, ], NtaxaOri)
+genus.tab.ori
+```
+
+```{r}
+#what are the abundance levels of each genus?
+enrichment.genus <- tax_glom(enrich, taxrank = "Genus")
+tax.count.enrich <-
+  data.frame(tax_table(enrichment.genus)[, 2:6], taxa_sums(enrichment.genus))
+rownames(tax.count.enrich) = NULL
+colnames(tax.count.enrich) <-
+  c("Phylum", "Class", "Order", "Family", "Genus", "Abundance")
+tax.count.enrich$Percent <-
+  round(tax.count.enrich$Abundance / sum(tax.count.enrich$Abundance) * 100,
+        4)
+Genus_df_enrich <-
+  tax.count.enrich[with(tax.count.enrich, order(-Percent)),]
+
+#how much do the top 10 genera contribute to total abundance?
+top10GeneraEnrich <- Genus_df_enrich[1:10,]
+round(sum(top10GeneraEnrich$Percent), 3)
+```
+```{r}
+###How diverse are the top 10 genera? i.e., how many species are there per genus?
+top10GeneraEnrich <- as.vector(Genus_df_enrich$Genus[1:10])
+Diversity.list.enrich <- vector("list", 10)
+names(Diversity.list.enrich) <- top10GeneraEnrich
+
+for (i in 1:length(top10GeneraEnrich)) {
+  physub = subset_taxa(enrich, Genus == top10GeneraEnrich[i])
+  physub = prune_taxa(taxa_sums(physub) > 0, physub)
+  Diversity.list.enrich[[i]] <- physub
+}
+
+#compute the number of taxa in each element of the list
+NtaxaEnrich <-
+  data.frame(unlist(lapply(Diversity.list.enrich, ntaxa)))
+
+colnames(NtaxaEnrich) <- "N.Species"
+#Make a table with percent abundance and number of taxa
+genus.tab.enrich <- data.frame(Genus_df_enrich[1:10, ], NtaxaEnrich)
+genus.tab.enrich
+```
+```{r}
+samdfenrich <- data.frame(sample_data(enrich.unsuper))
+```
+
+## Heatmap
+```{r}
+#Combine OTU abundance table and taxonomy table from the phyloseq object "my_phyloseq_object":
+obj <- enrich.unsuper
+obj
+# Make short names for OTUs - facilitates later plotting ease when amp_heatmap has the option tax_empty = "best" (for some reason)
+taxa_names(obj) <- paste0("ASV", seq(ntaxa(obj)))
+# Fix OTU table layout for exporting. taxa_as_rows = FALSE was not working.
+Totu_table =t(otu_table(obj))
+otu_table(obj)=Totu_table
+#export OTU table from phyloseq object
+otutable <- data.frame(OTU = rownames(phyloseq::otu_table(obj)@.Data),
+                       phyloseq::otu_table(obj)@.Data,
+                       phyloseq::tax_table(obj)@.Data,
+                       check.names = FALSE
+                       )
+otutable <- otutable %>% select(-OTU,-Genus_Species, -Genus_Family, -DB)
+
+#Extract metadata from the phyloseq object:
+metadata <- data.frame(sample_data(obj))
+metadata$SAMPLE_TYPE <- factor(metadata$SAMPLE_TYPE, levels = c("FESS","Enrichment"))
+metadata$ENRICH_PUB_LETTER <- factor(metadata$ENRICH_PUB_LETTER, levels = c("A","B","C","D","E","F","G"))
+
+# Extract phylogenetic tree from phyloseq object:
+phytree <- phyloseq::phy_tree(obj)
+
+#Load the data with amp_load:
+ampvis.obj <- amp_load(otutable, 
+                       metadata,
+                      tree = phytree
+                        )
+ampvis.obj
+```
+
+```{r}
+#fig.height = 5.5, fig.width = 7.5
+heatmap <- amp_heatmap(data = ampvis.obj,
+                       group_by = "SAMPLE_TYPE",
+                       facet_by = "ENRICH_PUB_LETTER",
+                       tax_aggregate = "Genus",
+                       tax_empty = "best",
+                       plot_values = FALSE,
+                       tax_show = 20,
+                       plot_colorscale = "log10",
+                       plot_na = TRUE,
+                       normalise = TRUE,
+                       plot_legendbreaks = c(.1,1,10),
+                       color_vector = c("#f2f9fc", "#0072B2")
+                      ) +
+  theme(axis.text.y = element_text(face = "italic", size = 11),
+        axis.text.x = element_text(size = 11),
+        legend.title = element_text(size = 11),
+        legend.text = element_text(size = 10))
+heatmap
+```
+
+```{r}
+ggsave(heatmap, filename = "16S_output/figures/enrichment_heatmap.pdf",
+       device = "pdf",
+       height = 5.5,
+       width = 6.6)
+```
+
+```{r}
+heatmapGrouped <- amp_heatmap(data = ampvis.obj,
+                       group_by = "SAMPLE_TYPE",
+                       facet_by = "SAMPLE_TYPE",
+                       tax_aggregate = "Genus",
+                       #tax_add = "Genus",
+                       tax_empty = "best",
+                       plot_values = TRUE,
+                       tax_show = 20,
+                       plot_legendbreaks = c(.1,1,10,100),
+                       plot_colorscale = "log10",
+                       plot_na = TRUE,
+                       normalise = TRUE,
+                       color_vector = c("#f2f9fc", "#0072B2")
+                      ) +
+  theme(axis.text.y = element_text(face = "italic", size = 11, color = "black"),
+        axis.text.x = element_blank(),
+        axis.ticks  = element_blank(),
+        legend.position = "right",
+        strip.text = element_text(size = 11, color = "black"),
+        legend.title = element_text(size = 11),
+        legend.text = element_text(size = 10),
+        )
+heatmapGrouped
+```
+```{r}
+ggsave(heatmapGrouped, filename = "16S_output/figures/enrichment_heatmap_grouped.pdf",
+       device = "pdf",
+       height = 5.5,
+       width = 5)
+```
+
+# Ordination
+## Double Principal Coordinate Analysis (DPCoA)
+Transformations
+```{r}
+ps.prop <- transform_sample_counts(enrich.unsuper, function(x){100 * x / sum(x)})
+ps.log <- transform_sample_counts(enrich.unsuper, function(x) log(1 + x))
+```
+
+```{r}
+# Calculate dpcoa 
+ps.dpcoa <- ordinate(ps.prop, method = "DPCoA")
+dpcoa_evals <- ps.dpcoa$eig
+```
+```{r}
+# Plot
+ps.dpcoa.plot <- plot_ordination(ps.prop, ps.dpcoa, type="biplot", color="Phylum", shape="SAMPLE_TYPE") +
+  geom_point(alpha = 1, size = 3) +
+  theme_pubr(base_size = 10) +
+  theme(
+    legend.position = "right",
+    legend.text = element_text(color = "black", face = "bold"),
+    legend.title = element_blank(),
+    panel.border = element_rect(colour = "black", fill=NA, size=1),
+    axis.line = element_blank(),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(color = "black"),
+    axis.title = element_text(color = "black")
+    ) +
+ # guides(color = guide_legend(nrow = 1, override.aes = list(fill="transparent"))) +
+  coord_fixed(sqrt(dpcoa_evals[2] / dpcoa_evals[1])) +
+  scale_color_manual(values = c("black","#de2d26", "#009E73","#56B4E9","#E69F00","#F0E442","#D55E00","#0072B2")) +
+  scale_shape_manual(values = c(4,13,16)) #For catagorical variables
+
+#Get rid of overlapping layers of points
+ps.dpcoa.plot$layers <- ps.dpcoa.plot$layers[-1]
+ps.dpcoa.plot
+```
+
+```{r}
+ggsave(ps.dpcoa.plot, filename = "16S_output/figures/enrichment_dpcoa_biplot.pdf",
+       device = "pdf",
+       useDingbats = FALSE,
+       height = 5,
+       width = 6)
+```
