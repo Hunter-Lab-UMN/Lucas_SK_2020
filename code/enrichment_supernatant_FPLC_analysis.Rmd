@@ -1,0 +1,119 @@
+---
+title: "FPLC Unicorn File Analysis"
+Author: "Sarah Lucas"
+---
+# Steps to get from Unicorn formatted files to R plots
+
+## Step 1. Download PyCorn. Most computers already have python (at least 2.7, but probably 2.7/3.x) pre-installed so copy and past the following code into a Terminal:
+
+pip install pycorn
+
+## Step 2. Export each Unicorn file as a .zip file and transfer them to your computer. Save all of them in a single folder. Enter that folder in your terminal. There are options for exporting files directly to .csv files, but I haven't been able to make it work yet. the pycorn-bin.py does havea csv flag instead of xlsx, but I haven't been able to make that work. So, Copy and past the following into your terminal with *zip ("all .zip files") as the 'input.res' option:
+
+* Extract data to xlsx-file:
+
+pycorn-bin.py -e xlsx input.res <-- DUMMY EXAMPLE
+pycorn-bin.py -e xlsx *zip <-- COPY AND PASTE
+
+Then, you can batch convert the xlsx files 
+
+* download the python package xlsx2csv:
+
+pip install xlsx2csv
+
+* make a script named batch_xlsx2csv.sh containing the text below and save it somewhere in your PATH (don't forget to de-comment the lines):
+
+for i in *.xlsx;
+ do
+  filename=$(basename "$i" .xlsx);
+  outext=".csv"
+  xlsx2csv $i $filename$outext
+done
+
+* make the script executable:
+
+chmod +x batch_xlsx2csv.sh to 
+
+Go back to the folder with your new xlsx files and run the line:
+batch_xlsx2csv.sh
+
+## Step 3. Load the libararies below.
+```{r}
+library(DescTools)
+library(tidyverse)
+library(ggpubr)
+```
+Aesthetics
+```{r}
+cbPal_MMM <- c("black","pink","#E69F00","#56B4E9","#009E73","#F0E442", "#0072B2","#75437C","#B52F25") 
+```
+
+## Step 4a. Function for importing .csv files
+```{r}
+read_chr_data <- function (x) {
+  read_csv(x, col_types = 
+             cols(
+               UV = col_double(),
+               X18 = col_double()
+             )) %>%
+  data.frame() %>%
+  select(ElutionVolume = UV, Absorbance280 = X18) %>%
+  slice(49:39797)
+}
+```
+## Step 4b. Import csv files. Customize to file location and data object naming.
+```{r}
+chr_data_MMM <- read_chr_data("../data/enrichment/fplc/MMM_blank.csv")
+chr_data_164 <- read_chr_data("../data/enrichment/fplc/Super164_blank.csv")
+chr_data_222 <- read_chr_data("../data/enrichment/fplc/Super222_blank.csv")
+chr_data_230 <- read_chr_data("../data/enrichment/fplc/Super230_blank.csv")
+chr_data_234 <- read_chr_data("../data/enrichment/fplc/Super234_blank.csv")
+chr_data_235 <- read_chr_data("../data/enrichment/fplc/Super235_blank.csv")
+chr_data_243 <- read_chr_data("../data/enrichment/fplc/Super243_blank.csv")
+chr_data_260 <- read_chr_data("../data/enrichment/fplc/Super260_blank.csv")
+chr_data_262 <- read_chr_data("../data/enrichment/fplc/Super262_blank.csv")
+```
+
+## Step 5. Customizable. Add/delete data objects from the plot. Change colors, aesthetics, etc.
+```{r}
+chr_data_MMM_first_peak <- chr_data_MMM %>% filter(between(ElutionVolume, 7, 10))
+chr_data_164_first_peak <- chr_data_164 %>% filter(between(ElutionVolume, 7, 10))
+chr_data_222_first_peak <- chr_data_222 %>% filter(between(ElutionVolume, 7, 10))
+chr_data_230_first_peak <- chr_data_230 %>% filter(between(ElutionVolume, 7, 10))
+chr_data_234_first_peak <- chr_data_234 %>% filter(between(ElutionVolume, 7, 10))
+chr_data_235_first_peak <- chr_data_235 %>% filter(between(ElutionVolume, 7, 10))
+chr_data_243_first_peak <- chr_data_243 %>% filter(between(ElutionVolume, 7, 10))
+chr_data_260_first_peak <- chr_data_260 %>% filter(between(ElutionVolume, 7, 10))
+chr_data_262_first_peak <- chr_data_262 %>% filter(between(ElutionVolume, 7, 10))
+```
+## Plot
+```{r fig.height=3, fig.width=3}
+chromatogram_firstpeak <- ggplot(chr_data_MMM_first_peak, aes(x=as.numeric(ElutionVolume), y = as.numeric(Absorbance280))) +
+  geom_line() +
+  geom_step(data = chr_data_164_first_peak, color = "pink") +
+  geom_step(data = chr_data_222_first_peak, color = "#E69F00") +
+  geom_step(data = chr_data_230_first_peak, color = "#56B4E9") +
+  geom_step(data = chr_data_234_first_peak, color = "#009E73") +
+  geom_step(data = chr_data_235_first_peak, color = "#F0E442") +
+  geom_step(data = chr_data_243_first_peak, color = "#0072B2") +
+  geom_step(data = chr_data_260_first_peak, color = "#75437C") +
+  geom_step(data = chr_data_262_first_peak, color = "#B52F25") +
+  geom_vline(xintercept = 7.2, alpha = 0.5, linetype = 2) +
+  geom_vline(xintercept = 8.2, alpha = 0.5, linetype = 2) +
+  scale_x_continuous(name = "Elution Volume (mL)") +
+  ylab("Absorbance (280nm)") +
+  theme_pubr(base_size = 10)
+
+chromatogram_firstpeak
+```
+```{r}
+ggsave(plot = chromatogram_firstpeak, 
+       file = "enrichment_output/fplc_firstpeak.pdf", 
+       device = "pdf", 
+       width = 2.5, height = 2.5)
+```
+
+```{r}
+sessionInfo()
+```
+
