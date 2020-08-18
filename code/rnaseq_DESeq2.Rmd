@@ -1,0 +1,238 @@
+---
+title: "Differential gene transcript abundance using DESeq2"
+---
+
+```{r include=FALSE}
+library(DESeq2)
+library(tidyverse)
+library(apeglm)
+library(ggpubr)
+library(ggthemes)
+library(EnhancedVolcano)
+library(cowplot)
+library(hablar)
+```
+
+# Data Import
+## Gene Annotation
+Gene specific info from aureowiki: http://aureowiki.med.uni-greifswald.de/Main_Page
+```{r}
+aureowikiGenes <- read_tsv("../data/rnaseq/GeneSpecificInformation_USA300_FPR3757.tsv")
+aureowikiGenesAbbr <- select(aureowikiGenes, GeneID = "locus tag", pan_gene_symbol = "pan gene symbol", product, contains("TIGR"))
+```
+## RSubread Count Data
+```{r}
+counts <- readRDS("../data/rnaseq/subread/counts.rds")
+```
+## Sample Data
+```{r}
+coldata <- read_tsv("../data/rnaseq/samplesheet.txt") # Sample data
+```
+## Data Tidying
+Make rownames in coldata and colnames in counts match.
+```{r}
+colnames(counts) <- unique(coldata$SampleID)
+counts
+```
+
+# Differential Abundance: Group
+## Run DESeq2 function on dataset using "group" as the design factor. Group specifies the experimental growth conditions for S. aureus.
+Format our data into a DESeqDataSet object using "Group" as the design factor
+```{r}
+# make DESeq2 object
+ddsSE <- DESeqDataSetFromMatrix(
+  countData = counts,
+  colData = coldata,
+  design= ~ Group)
+class(ddsSE)
+```
+Minimal filtering of low counts before any analysis.
+```{r}
+keep <- rowSums(counts(ddsSE)) >= 10
+ddsSE <- ddsSE[keep,]
+```
+Run the DESeq 
+```{r}
+dds <- DESeq(ddsSE, betaPrior = FALSE)
+```
+List the different comparisons based on the :Group" design factor.
+```{r}
+resultsNames(dds)
+```
+
+
+## Results for each condition compared to MMM
+results column meanings (Seen in "sigtab" documents)
+[1] "mean of normalized counts for all samples"             
+[2] "log2 fold change (MLE): condition treated vs untreated"
+[3] "standard error: condition treated vs untreated"        
+[4] "Wald statistic: condition treated vs untreated"        
+[5] "Wald test p-value: condition treated vs untreated"     
+[6] "BH adjusted p-values
+
+```{r}
+res234vsMMMGalpha05beta1 <- results(dds, contrast = c("Group","sample_234","control_MMM_GLU"), alpha = 0.05, lfcThreshold = 1, altHypothesis = "greaterAbs")
+res243vsMMMGalpha05beta1 <- results(dds, contrast = c("Group","sample_243","control_MMM_GLU"), alpha = 0.05, lfcThreshold = 1, altHypothesis = "greaterAbs")
+res262vsMMMGalpha05beta1 <- results(dds, contrast = c("Group","sample_262","control_MMM_GLU"), alpha = 0.05, lfcThreshold = 1, altHypothesis = "greaterAbs")
+
+summary(res234vsMMMGalpha05beta1)
+summary(res243vsMMMGalpha05beta1)
+summary(res262vsMMMGalpha05beta1)
+```
+### Function: Results to Dataframes
+This function will transform the results tables into a dataframe with added annotation information from the aureowiki database.
+```{r}
+res2table <- function(res = ""){
+  data.frame(res) %>%
+    rownames_to_column("GeneID") %>%
+    left_join(aureowikiGenesAbbr, by = "GeneID")}
+```
+### Apply the res2table function
+```{r}
+# with beta=1, alpha=.001
+df234vsMMMGalpha05beta1 <- res2table(res = res234vsMMMGalpha05beta1)
+df243vsMMMGalpha05beta1 <- res2table(res = res243vsMMMGalpha05beta1)
+df262vsMMMGalpha05beta1 <- res2table(res = res262vsMMMGalpha05beta1)
+```
+
+### Final tables of DEGs
+Filter out everything that is not significant, so the table will only be made up of genes that have a greater than 1 log2fc and the padj is < .05 (This evaluation of significance was dictated in the original results function)
+```{r}
+sigtab234vsMMMGalpha05beta1 <- filter(df234vsMMMGalpha05beta1, padj < .05)
+sigtab243vsMMMGalpha05beta1 <- filter(df243vsMMMGalpha05beta1, padj < .05)
+sigtab262vsMMMGalpha05beta1 <- filter(df262vsMMMGalpha05beta1, padj < .05)
+```
+Export csv files for significant DEGs
+```{r}
+write_csv(sigtab234vsMMMGalpha05beta1, path = "rnaseq_output/sigtab234vsMMMGalpha05beta1.csv")
+write_csv(sigtab243vsMMMGalpha05beta1, path = "rnaseq_output/sigtab243vsMMMGalpha05beta1.csv")
+write_csv(sigtab262vsMMMGalpha05beta1, path = "rnaseq_output/sigtab262vsMMMGalpha05beta1.csv")
+```
+
+### Function: Custom MA Plots
+Plot log2FC on the y axis and log2 mean normalized counts on the x-axis.  
+Color is based on the adjusted p-value
+```{r}
+makeMA <- function(x){
+  p <- ggmaplot(x, 
+                #fc of 2 corresponds to the log2fc of 1 we tested in our hyp. in the results command
+                fdr = 0.05, fc = 2, size = 2, alpha = 0.8,
+                palette = c("#DE3E2D", "#1C67BD", "lightgrey"),
+                genenames = as.vector(x$pan_gene_symbol),
+                legend = "right", 
+                top = 25,
+                select.top.method	= "padj",
+                font.label = c(10, "bold", "black"),
+                font.legend = "bold",
+                font.main = "bold",
+                ggtheme = ggpubr::theme_pubr())
+  p
+}
+```
+
+### MA Plots
+```{r}
+maPlot234 <- makeMA(df234vsMMMGalpha05beta1) + ggtitle("MMMG vs CFS-D")
+maPlot234
+maPlot243 <- makeMA(df243vsMMMGalpha05beta1) + ggtitle("MMMG vs CFS-F")
+maPlot243
+maPlot262 <- makeMA(df262vsMMMGalpha05beta1) + ggtitle("MMMG vs CFS-H")
+maPlot262
+```
+```{r include = FALSE}
+ggsave(maPlot234, filename = "rnaseq_output/maplot243vsMMMG.pdf", height=5, width=7)
+ggsave(maPlot243, filename = "rnaseq_output/maplot234vsMMMG.pdf", height=5, width=7)
+ggsave(maPlot262, filename = "rnaseq_output/maplot262vsMMMG.pdf", height=5, width=7)
+```
+
+# Differential Abundance: Sample vs. Control
+## Run DESeq2 function on dataset using "Sample_Or_Control" as the design factor.
+Format our data into a DESeqDataSet object using "Sample_Or_Control" as the design factor
+```{r}
+# make DESeq2 object
+ddsSE_SamplevControl <- DESeqDataSetFromMatrix(
+  countData = counts,
+  colData = coldata,
+  design= ~ Sample_Or_Control)
+class(ddsSE_SamplevControl)
+```
+Minimal filtering of low counts before any analysis.
+```{r}
+keep <- rowSums(counts(ddsSE_SamplevControl)) >= 10
+ddsSE_SamplevControl <- ddsSE_SamplevControl[keep,]
+```
+DESeq 
+```{r}
+dds_SamplevControl <- DESeq(ddsSE_SamplevControl, betaPrior = FALSE)
+```
+## Results for Sample vs Control
+```{r}
+resultsNames(dds_SamplevControl)
+```
+results column meanings (Seen in "sigtab" documents)
+[1] "mean of normalized counts for all samples"             
+[2] "log2 fold change (MLE): condition treated vs untreated"
+[3] "standard error: condition treated vs untreated"        
+[4] "Wald statistic: condition treated vs untreated"        
+[5] "Wald test p-value: condition treated vs untreated"     
+[6] "BH adjusted p-values"
+
+```{r}
+resSamplevControlalpha05beta1 <- results(dds_SamplevControl, 
+                                    contrast = c("Sample_Or_Control","sample","control"), 
+                                    alpha = 0.05, lfcThreshold = 1, altHypothesis = "greaterAbs"
+                                    )
+
+summary(resSamplevControlalpha05beta1)
+```
+### Dataframe of results
+
+### Dataframe of results
+Gene names as they should appear on the plot
+```{r}
+geneNames <- c("pdf","nanT","nanA","nanK","nanE","nagA","nagB","glcC","rocA","rocF","rocD","putA","gudB","sucA","sucC","sdhA","fumC", "mqo","pckA","spa","acsA","citZ","SAUSA300_RS09510")
+```
+Add new column in results dataframe for plotting gene names of interest
+```{r}
+dfSamplevControlalpha05beta1 <- res2table(resSamplevControlalpha05beta1)
+dfSamplevControlalpha05beta1 <- mutate(dfSamplevControlalpha05beta1, pan_gene_symbol_RS = ifelse(pan_gene_symbol == "-", GeneID, pan_gene_symbol), plotName = ifelse(pan_gene_symbol_RS %in% geneNames, pan_gene_symbol_RS, ""))
+```
+### MA Plot
+```{r}
+maPlotSamplevControl <- ggmaplot(dfSamplevControlalpha05beta1, 
+                #fc of 2 corresponds to the log2fc of 1 we tested in our hyp. in the results command
+                fdr = 0.05, fc = 2, 
+                size = 2, 
+                alpha = 0.8,
+                palette = c("#DE3E2D", "#1C67BD", "lightgrey"),
+                genenames = as.vector(dfSamplevControlalpha05beta1$plotName),
+                legend = "right", 
+                top = 50,
+                select.top.method	= "padj",
+                font.label = c(10, "bold", "black"),
+                label.rectangle = TRUE,
+                font.legend = "bold",
+                font.main = "bold",
+                ggtheme = ggpubr::theme_pubr())
+maPlotSamplevControl
+```
+```{r}
+ggsave(maPlotSamplevControl, filename = "rnaseq_output/maPlotSamplevControl.pdf", height = 5, width = 7)
+```
+
+### Final tables of DEGs
+Filter out everything that is not significant, so the table will only be made up of genes that have a greater than 1 log2fc and the padj is < .05 (This evaluation of significance was dictated in the original results function)
+```{r}
+sigtabSamplevControl <- filter(dfSamplevControlalpha05beta1, padj < .05)
+```
+
+### Export data files
+```{r}
+write_csv(sigtabSamplevControl, path = "rnaseq_output/sigtabSamplevControlalpha05beta1.csv")
+```
+
+# Session Info
+```{r}
+sessionInfo()
+```
+

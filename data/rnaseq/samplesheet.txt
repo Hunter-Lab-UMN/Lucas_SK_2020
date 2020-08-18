@@ -1,0 +1,13 @@
+SampleID	shortSampleID	fastqR1	fastqR2	Sample_Or_Control	Group	shortGroupName	BioRep	Description
+234.1	Super234-1	234-1_S1_R1_001.fastq.gz	234-1_S1_R2_001.fastq.gz	sample	sample_234	D	1	S. aureus grown to stationary phase in supernatant from 48 hour  CRS community 234
+234.2	Super234-2	234-2_S2_R1_001.fastq.gz	234-2_S2_R2_001.fastq.gz	sample	sample_234	D	2	S. aureus grown to stationary phase in supernatant from 48 hour  CRS community 234
+234.3	Super234-3	234-3_S3_R1_001.fastq.gz	234-3_S3_R2_001.fastq.gz	sample	sample_234	D	3	S. aureus grown to stationary phase in supernatant from 48 hour  CRS community 234
+243.1	Super243-1	243-1_S4_R1_001.fastq.gz	243-1_S4_R2_001.fastq.gz	sample	sample_243	F	1	S. aureus grown to stationary phase in supernatant from 48 hour  CRS community 243
+243.2	Super243-2	243-2_S5_R1_001.fastq.gz	243-2_S5_R2_001.fastq.gz	sample	sample_243	F	2	S. aureus grown to stationary phase in supernatant from 48 hour  CRS community 243
+243.3	Super243-3	243-3_S6_R1_001.fastq.gz	243-3_S6_R2_001.fastq.gz	sample	sample_243	F	3	S. aureus grown to stationary phase in supernatant from 48 hour  CRS community 243
+262.1	Super262-1	262-1_S7_R1_001.fastq.gz	262-1_S7_R2_001.fastq.gz	sample	sample_262	H	1	S. aureus grown to stationary phase in supernatant from 48 hour  CRS community 262
+262.2	Super262-2	262-2_S8_R1_001.fastq.gz	262-2_S8_R2_001.fastq.gz	sample	sample_262	H	2	S. aureus grown to stationary phase in supernatant from 48 hour  CRS community 262
+262.3	Super262-3	262-3_S9_R1_001.fastq.gz	262-3_S9_R2_001.fastq.gz	sample	sample_262	H	3	S. aureus grown to stationary phase in supernatant from 48 hour  CRS community 262
+MMM.GLU.1.OCT2019	MMMG-1	MMM-GLU-1-OCT2019_S13_R1_001.fastq.gz	MMM-GLU-1-OCT2019_S13_R2_001.fastq.gz	control	control_MMM_GLU	MMMG	1	S. aureus grown to stationary phase in minimal mucin media with glucose (0.25%)
+MMM.GLU.2.OCT2019	MMMG-2	MMM-GLU-2-OCT2019_S14_R1_001.fastq.gz	MMM-GLU-2-OCT2019_S14_R2_001.fastq.gz	control	control_MMM_GLU	MMMG	2	S. aureus grown to stationary phase in minimal mucin media with glucose (0.25%)
+MMM.GLU.3.OCT2019	MMMG-3	MMM-GLU-3-OCT2019_S15_R1_001.fastq.gz	MMM-GLU-3-OCT2019_S15_R2_001.fastq.gz	control	control_MMM_GLU	MMMG	3	S. aureus grown to stationary phase in minimal mucin media with glucose (0.25%)

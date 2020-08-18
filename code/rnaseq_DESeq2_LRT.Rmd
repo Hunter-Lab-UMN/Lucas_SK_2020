@@ -1,0 +1,291 @@
+---
+title: "DESeq2-LRT comparisons"
+---
+```{r include=FALSE}
+library(DESeq2)
+library(tidyverse)
+library(apeglm)
+library(ggpubr)
+library(ggthemes)
+library(EnhancedVolcano)
+library(cowplot)
+library(hablar)
+library(pheatmap)
+library(RColorBrewer)
+```
+# Data Import
+## Gene Annotation
+Gene specific info from aureowiki: http://aureowiki.med.uni-greifswald.de/Main_Page
+```{r}
+aureowikiGenes <- read_tsv("../data/rnaseq/GeneSpecificInformation_USA300_FPR3757.tsv")
+aureowikiGenesAbbr <- select(aureowikiGenes, GeneID = "locus tag", pan_gene_symbol = "pan gene symbol", product, contains("TIGR"))
+```
+## RSubread Count Data
+```{r}
+countsSamples <- readRDS("../data/rnaseq/subread/counts.rds") %>%
+  select(-contains("MMM"))
+```
+## Sample Data
+```{r}
+coldataSamples <- read_tsv("../data/rnaseq/samplesheet.txt") %>%
+  filter(Sample_Or_Control == "sample")
+```
+## Data Tidying
+Make rownames in coldata and colnames in counts match.
+```{r}
+colnames(countsSamples) <- unique(coldataSamples$shortSampleID)
+countsSamples
+```
+# Differential Abundance: Group
+## Run DESeq2 function on dataset using "group" as the design factor.
+Format our data into a DESeqDataSet object using "Group" as the design factor
+```{r}
+# make DESeq2 object
+ddsSE_samples <- DESeqDataSetFromMatrix(
+  countData = countsSamples,
+  colData = coldataSamples,
+  design= ~ Group)
+class(ddsSE_samples)
+```
+Run the DESeq 
+```{r}
+ddsLRT_samples <- DESeq(ddsSE_samples, test = "LRT", reduced = ~1)
+resLRT_samples <- results(ddsLRT_samples)
+```
+```{r}
+summary(resLRT_samples)
+resLRT_samples_df <- data.frame(resLRT_samples) %>% rownames_to_column("gene")
+```
+Assistance through this online resource:
+https://hbctraining.github.io/DGE_workshop/lessons/08_DGE_LRT.html
+```{r}
+padj.cutoff <- 1e-10
+# Subset the LRT results to return genes with padj < 0.05
+sig_res_LRT_samples <- resLRT_samples %>%
+               data.frame() %>%
+               rownames_to_column(var="gene") %>% 
+               as_tibble() %>% 
+               filter(padj < padj.cutoff) %>%
+  rename(GeneID=gene) %>%
+  left_join(aureowikiGenesAbbr, by="GeneID")
+```
+export to csv
+```{r}
+write_csv(sig_res_LRT_samples, path="rnaseq_output/sig_res_LRT_samples.csv")
+```
+
+# Filter significance table to only include log2fc 
+```{r}
+sig_res_LRT_samples_lfc1 <- filter(sig_res_LRT_samples, !between(log2FoldChange, -1, 1))
+```
+export to csv
+```{r}
+write_csv(sig_res_LRT_samples_lfc1, path = "rnaseq_output/sig_res_LRT_samples_lfc1.csv")
+```
+
+## rLog transform
+The function rlog returns a SummarizedExperiment object which contains the rlog-transformed values in its assay slot:
+```{r}
+rld_samples <- rlog(ddsLRT_samples)
+head(assay(rld_samples))
+```
+Now filter, the rlog transformed dataset to only include those genes in the sig_res_LRT list.
+```{r}
+# pull geneIDs from the filtered results table
+LRT_samples_geneID <- sig_res_LRT_samples_lfc1 %>% pull(GeneID)
+# filter the rld transformed count matrix by those geneIDs
+matLRTsamplesGeneID <- assay(rld_samples)[ LRT_samples_geneID, ]
+```
+
+## Top 100 variable genes within the LRT genes
+```{r}
+topVarGenesSamples <- head(order(-rowVars(matLRTsamplesGeneID)),100)
+matLRTsamplesGeneIDvar <- matLRTsamplesGeneID[ topVarGenesSamples, ]
+```
+The heatmap becomes more interesting if we do not look at absolute expression strength but rather at the amount by which each gene deviates in a specific sample from the gene's average across all samples. Hence, we center each genes' values across samples, and plot a heatmap. We provide the column side colors to help identify the treated samples (in blue) from the untreated samples (in grey).
+```{r}
+matLRTsamplesGeneIDvarMinusMean <- matLRTsamplesGeneIDvar - rowMeans(matLRTsamplesGeneIDvar)
+```
+
+```{r}
+# make a table of gene labels to plot with
+geneLabelsSamplesLRTvarMinusMean <- as.data.frame(rownames(matLRTsamplesGeneIDvarMinusMean)) %>%
+  rename(GeneID = "rownames(matLRTsamplesGeneIDvarMinusMean)") %>%
+  left_join(aureowikiGenesAbbr, by="GeneID") %>%
+  mutate(pan_gene_symbol = as.character(pan_gene_symbol)) %>%
+  replace_na(list(pan_gene_symbol = "-")) %>%
+  mutate(labels = ifelse(pan_gene_symbol == "-", product, pan_gene_symbol)) 
+rownames(geneLabelsSamplesLRTvarMinusMean) = geneLabelsSamplesLRTvarMinusMean$GeneID
+# make a table 
+sampleLabels <- coldataSamples %>% 
+  mutate(shortGroupNameBioRep = paste0(shortGroupName, BioRep)) %>%
+  select(shortSampleID, shortGroupNameBioRep)
+```
+
+```{r}
+heatmapLRTVarSamples <- pheatmap(matLRTsamplesGeneIDvarMinusMean,
+                    labels_col = sampleLabels$shortGroupNameBioRep,
+                    labels_row = geneLabelsSamplesLRTvarMinusMean$labels,
+                    legend = FALSE,
+                    annotation_legend=FALSE,
+                    fontsize=10)
+heatmapLRTVarSamples
+```
+
+A heatmap with just the genes that we talk about in the paper:
+Note - agrD or the autoinducing peptide is in the aureowikiGenes but is not present in the Count file, meaning it wasn't observed in the dataset at all, or didn't align to the genome, or was filtered out for some reason (alignment minimum size filtering was set to 50bp which I don't think would filter out this transcript (gene size = 141bp))
+```{r}
+pubGenes <- c("SAUSA300_RS11035", #ilv/bud
+"SAUSA300_RS11040",
+"SAUSA300_RS11050",
+"SAUSA300_RS11075",
+"SAUSA300_RS02880",
+"SAUSA300_RS11060",
+"SAUSA300_RS11065",
+"SAUSA300_RS11070",
+"SAUSA300_RS11940",
+"SAUSA300_RS11935",
+"SAUSA300_RS14070",
+"SAUSA300_RS00670",
+"SAUSA300_RS11855", #LacCDEF
+"SAUSA300_RS11845",
+"SAUSA300_RS11860",
+"SAUSA300_RS11850",
+"SAUSA300_RS00925", #ssuC
+"SAUSA300_RS00915", #ssuB
+"SAUSA300_RS00920", #ssuA
+"SAUSA300_RS01905", #metC
+"SAUSA300_RS01900", #metF
+"SAUSA300_RS01910", #metI
+"SAUSA300_RS01895", #metE
+"SAUSA300_RS04805", #opp3A
+"SAUSA300_RS04800", #opp3F
+"SAUSA300_RS04795", #opp3D
+"SAUSA300_RS10935", #agrB
+"SAUSA300_RS10940", #agrD
+"SAUSA300_RS10945", #agrC
+"SAUSA300_RS10950", #agrA
+"SAUSA300_RS10930", #hld-RNAIII
+"SAUSA300_RS05105", #sspB
+"SAUSA300_RS05105", #aur
+"SAUSA300_RS14315", #isaB
+"SAUSA300_RS13755", #cidA
+"SAUSA300_RS14450", #icaR
+"SAUSA300_RS14470", #icaC
+"SAUSA300_RS14465", #icaB
+"SAUSA300_RS14455" #icaA
+) 
+```
+
+Filter from matrix of LRT genes
+Now filter, the rlog transformed dataset to only include those genes in the sig_res_LRT list.
+```{r}
+# pull geneIDs from the filtered results table
+LRT_samples_pubID <- sig_res_LRT_samples_lfc1 %>% 
+  filter(GeneID %in% pubGenes) %>%
+  pull(GeneID)
+# filter the rld transformed count matrix by those geneIDs
+matLRTsamplesPubID <- assay(rld_samples)[ LRT_samples_pubID, ]
+```
+The heatmap becomes more interesting if we do not look at absolute expression strength but rather at the amount by which each gene deviates in a specific sample from the gene's average across all samples. Hence, we center each genes' values across samples, and plot a heatmap. We provide the column side colors to help identify the treated samples (in blue) from the untreated samples (in grey).
+```{r}
+matLRTsamplesPubIDMinusMean <- matLRTsamplesPubID - rowMeans(matLRTsamplesPubID)
+```
+Set up labels for heatmap
+```{r}
+# make a table of gene labels to plot with
+geneLabelsSamplesLRTMinusMean <- as.data.frame(rownames(matLRTsamplesPubIDMinusMean)) %>%
+  rename(GeneID = "rownames(matLRTsamplesPubIDMinusMean)") %>%
+  left_join(aureowikiGenesAbbr, by="GeneID") %>%
+  mutate(pan_gene_symbol = as.character(pan_gene_symbol)) %>%
+  replace_na(list(pan_gene_symbol = "-")) %>%
+  mutate(labels = ifelse(pan_gene_symbol == "-", product, pan_gene_symbol)) 
+rownames(geneLabelsSamplesLRTMinusMean) = geneLabelsSamplesLRTMinusMean$GeneID
+# make a table 
+sampleLabels <- coldataSamples %>% 
+  mutate(shortGroupNameBioRep = paste0(shortGroupName, BioRep)) %>%
+  select(shortSampleID, shortGroupName, shortGroupNameBioRep)
+```
+
+```{r}
+heatmapLRTPubSamples <- pheatmap(matLRTsamplesPubIDMinusMean,
+                    labels_col = sampleLabels$shortGroupNameBioRep,
+                    labels_row = geneLabelsSamplesLRTMinusMean$labels,
+                    color = colorRampPalette(rev(brewer.pal(n = 9, name ="RdYlBu")))(100),
+                    cellheight = 8,
+                    cellwidth = 8,
+                    legend = FALSE,
+                    annotation_legend=FALSE,
+                    treeheight_row = 10,
+                    treeheight_col = 10,
+                    angle_col = 90,
+                    border_color = "whitesmoke",
+                    fontsize=8,
+                    )
+heatmapLRTPubSamples
+```
+
+```{r}
+ggsave(heatmapLRTPubSamples, filename = "rnaseq_output/CFS_LRT_heatmap_pubGenes.pdf",
+       device = "pdf",
+       height = 4.5,
+       width = 2)
+```
+
+
+
+
+
+
+
+
+
+
+
+## Ternary Plot
+```{r}
+select_vars234 <- c("Super234.1","Super234.2","Super234.3")
+select_vars243 <- c("Super243.1","Super243.2","Super243.3")
+select_vars262 <- c("Super262.1","Super262.2","Super262.3")
+
+ternarydf <- matLRTsamplesGeneID %>%
+  data.frame() %>%
+  rownames_to_column("GeneID") %>%
+  mutate(avgRlog234 = rowMeans(select(., select_vars234)),
+         avgRlog243 = rowMeans(select(., select_vars243)),
+         avgRlog262 = rowMeans(select(., select_vars262))) %>%
+  left_join(aureowikiGenesAbbr, by="GeneID") %>%
+  select(GeneID, contains("avg"), 
+         pan_gene_symbol,
+         TIGRFAM_ROLE = "TIGRFAM Main Role")
+```
+
+```{r}
+unique(ternarydf$TIGRFAM_ROLE)
+```
+
+```{r}
+library(ggtern)
+#Building the static ternary plot
+p <- ggtern(data=ternarydf, aes(x = avgRlog234, 
+                           y = avgRlog243, 
+                           z = avgRlog262)) +
+  geom_point(aes(color = TIGRFAM_ROLE), alpha=0.6, size = 3) +
+  tern_limits(T = .48, 
+              L = .48, 
+              R = .48) +
+  geom_text(
+    label = ternarydf$pan_gene_symbol,
+    size = 4,
+    check_overlap = TRUE
+  ) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+p
+```
+```{r}
+ggsave(p, filename = "../figures/DESeq2/LRTlfc1_ternary_plot.pdf", device = "pdf")
+```
+
+

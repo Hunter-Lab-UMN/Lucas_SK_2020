@@ -1,0 +1,168 @@
+---
+title: "Alignment and annotation of RNA-seq data to the S. aureus USA300-FPR3757 genome using RSubread"
+---
+
+```{r}
+library(Rsubread)
+library(tidyverse)
+```
+
+Earlier we put all the sequencing read data (.fastq.gz files) in the data directory. Now we need to find them in order to tell the Rsubread aligner which files to look at. We can search for all .fastq.gz files in the data directory using the list.files command. The pattern argument takes a regular expression. In this case we are using the $ to mean the end of the string, so we will only get files that end in “.fastq.gz”
+
+Designate path with sequences:
+```{r}
+path <- "../"
+list.files(path)
+```
+# Obtain reference files
+Set up directories and download files
+```{r}
+## setup the paths to the files on the ncbi ftp server
+refLocal <- paste0(path,"data/rnaseq/GCF_ASM1346v1/")
+refLocal
+```
+Use the NCBI RefSeq ftp site to obtain the genome fasta file and gtf/gff annotation files
+```{r}
+# Files from NCBI RefSeq
+faFTP <- "ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/013/465/GCF_000013465.1_ASM1346v1/GCF_000013465.1_ASM1346v1_genomic.fna.gz"
+gffFTP <- "ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/013/465/GCF_000013465.1_ASM1346v1/GCF_000013465.1_ASM1346v1_genomic.gff.gz"
+gtfFTP <- "ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/013/465/GCF_000013465.1_ASM1346v1/GCF_000013465.1_ASM1346v1_genomic.gtf.gz"
+featureTableftp <- "ftp://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/013/465/GCF_000013465.1_ASM1346v1/GCF_000013465.1_ASM1346v1_feature_table.txt.gz"
+
+
+## the full S. aureus genome is in this file 
+fa <- "GCF_000013465.1_ASM1346v1_genomic.fna.gz"
+## the gene annotations are in this file - gff
+gff <- "GCF_000013465.1_ASM1346v1_genomic.gff.gz"
+## the gene annotations are in this file - gtf
+gtf <- "GCF_000013465.1_ASM1346v1_genomic.gtf.gz"
+## the readable feature table
+features <- "GCF_000013465.1_ASM1346v1_feature_table.txt.gz"
+
+
+fastaFile <- paste0(refLocal, fa)
+gffFile <- paste0(refLocal, gff)
+gtfFile <- paste0(refLocal, gtf)
+featureFile <- paste0(refLocal, features)
+
+## run the commands to get the file
+#download.file(url = faFTP, destfile = fastaFile, method = "curl")
+#download.file(url = gffFTP, destfile = gffFile, method = "curl")
+#download.file(url = gtfFTP, destfile = gtfFile, method = "curl")
+#download.file(url = featureTableftp, destfile = featureFile, method = "curl")
+```
+
+# Alignment
+## Build the index
+Read sequences are stored in compressed (gzipped) FASTQ files. Before the differential expression analysis can proceed, these reads must be aligned to the Staphylococcus aureus genome and counted into annotated genes. This can be achieved with functions in the Rsubread package.
+
+```{r}
+buildindex(basename="../data/GCF_ASM1346v1/subread_indexes/ASM1346v1",
+           reference=fastaFile)
+```
+
+## Align paired end reads to indexed S. aureus genome
+
+Designate forward and reverse reads. I am using untrimmed reads here because the fastQC reports looked ok, with no adapter sequences. Some samples had less than optimal quality scores at the end of the run, but most had near perfect quality, and none were egregious. I have been reading chatter about the pros and cons of trimming, and how that affects DE analysis, so for now I am just being conservative.
+```{r}
+readPath <- paste0(path, "data/rnaseq/fastq")
+fnFs <- sort(list.files(readPath, pattern = "_R1_001.fastq.gz", full.names = TRUE))
+fnRs <- sort(list.files(readPath, pattern = "_R2_001.fastq.gz", full.names = TRUE))
+if(length(fnFs) != length(fnRs)) stop("Forward and reverse files do not match.")
+```
+Use the align function in the Rsubread package
+```{r}
+align(index="../data/rnaseq/GCF_ASM1346v1/subread_indexes/ASM1346v1", 
+      input_format = "gzFASTQ", 
+      type = "rna",
+      nthreads = 4,
+      output_format = "BAM",
+      readfile1 = fnFs, readfile2 = fnRs,
+      )
+```
+
+## Get proportion of mapped reads
+(move BAM files to bamPath)
+```{r}
+bamPath <- ("../data/rnaseq/fastq")
+bamFiles <- list.files(bamPath, pattern = ".BAM$", full.names = TRUE)
+bamFiles
+```
+```{r}
+props <- propmapped(files=bamFiles)
+props
+```
+
+# Counting
+Now that we have figured out where each read comes from in the genome, we need to summarise the information across genes. The alignment produces a set of BAM files, where each file contains the read alignments for each library. In the BAM file, there is a chromosomal location for every read that mapped uniquely. The mapped reads can be counted across S. aureus genes by using the featureCounts function.    
+Quick loo at the .gtf file to see what we're dealing with:  
+```{r}
+gtfDF <- read_tsv("../data/rnaseq/GCF_ASM1346v1/GCF_000013465.1_ASM1346v1_genomic.txt", skip = 5)
+gtfDF
+```
+See third column of gtf file to coose which feature type we'd like to use to annotate our alignments. I chose gene here.
+```{r}
+fc <- featureCounts(nthreads = 4, 
+                    files = bamFiles, 
+                    annot.ext = gtfFile,
+                    isGTFAnnotationFile = TRUE,
+                    isPairedEnd=TRUE,
+                    GTF.featureType = "gene", # Use "gene"
+                    GTF.attrType = "gene_id", # We will use this to add attributes later from the feature table.
+                    requireBothEndsMapped = TRUE,
+                    # Counting multi mapping reads
+                    #Not recommended for differential abundance analysis
+                    countMultiMappingReads = FALSE 
+                    )
+# See what slots are stored in fc
+names(fc)
+## Take a look at the featurecounts stats
+fc$stat
+```
+# Explore/format Annotation files
+We can pull out data from the featureCounts results for use in downstream analyses.
+
+The counts for the samples are stored in fc$counts. Take a look at that.
+```{r}
+## Take a look at the dimensions to see the number of genes
+dim(fc$counts)
+```
+Lets take a look at the count matrix associated with the featureCounts list.
+```{r}
+## Take a look at the first 6 lines
+head(fc$counts)
+```
+The row names of the fc$counts matrix represent the Entrez gene identifiers for each gene and the column names are the output filenames from calling the align function. The annotation slot shows the annotation information that featureCounts used to summarise reads over genes.
+
+let's look at the feature table text file  to see what kind of data we can include in our annotation file. This will become useful when we're looking at genes of interest/plotting.
+```{r}
+featureTable <- read_tsv((file = "../data/rnaseq/GCF_ASM1346v1/GCF_000013465.1_ASM1346v1_feature_table.txt"))
+names(featureTable)[1] <- "feature"
+# What's different in information between the CDS and gene categories?
+featureTableCDS <- featureTable %>%
+   filter(feature == "CDS")
+featureTableGene <- featureTable %>%
+   filter(feature == "gene")
+featureDiff <- anti_join(featureTableGene, featureTableCDS, by = "locus_tag")
+```
+
+Export both the annotation file and counts.
+```{r}
+fcannotation <-data.frame(fc$annotation)
+# Add additional information from the feature table 
+fcannotation <- fcannotation %>%
+   left_join(featureTableGene, by = c("GeneID" = "locus_tag")) %>%
+   select(GeneID, Chromosome=Chr, Start, End, Strand, Length, Class=class, Assembly=assembly, Attributes=attributes) %>%
+   left_join(featureTableCDS, by = c("GeneID" = "locus_tag")) %>%
+   select(GeneID, Chromosome, Start, End, Strand, Length, Class, Assembly, Attributes, Description=name, Name=symbol) %>%
+   separate(Attributes, into = c("attribute","Old_GeneID"), sep = c("="), remove = TRUE) %>% select(-attribute)
+
+write_csv(fcannotation, path = "../data/rnaseq/subread/annotation.csv")
+```
+```{r}
+counts <- data.frame(fc$counts)
+saveRDS(counts, "../data/rnaseq/subread/counts.rds")
+```
+
+
+
