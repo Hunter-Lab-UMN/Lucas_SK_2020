@@ -258,11 +258,11 @@ Phylum.Prop.Grid <- plot_grid(barplot.phylum.prop.CRS + theme(legend.position = 
 Phylum.Prop.Grid
 ```
 ```{r}
-ggsave(Phylum.Prop.Grid,
-       filename = "16S_output/figures/PhylumPropBarGrid.pdf",
-       device = "pdf",
-      height = 8,
-       width = 25)
+#ggsave(Phylum.Prop.Grid,
+#       filename = "16S_output/figures/PhylumPropBarGrid.pdf",
+#       device = "pdf",
+#      height = 8,
+#       width = 25)
 ```
 
 ## Boxplots
@@ -355,10 +355,10 @@ heatmap.CRS <- amp_heatmap(ampvis.CRS,
 heatmap.CRS
 ```
 ```{r}
-ggsave(heatmap.CRS, 
-       filename = "16S_output/figures/taxaHeatPlotCRS.pdf",
-       device = "pdf",
-       height = 3)
+#ggsave(heatmap.CRS, 
+#       filename = "16S_output/figures/taxaHeatPlotCRS.pdf",
+#       device = "pdf",
+#       height = 3)
 ```
 Get abundance dataframe for the heatmap
 ```{r}
@@ -397,10 +397,10 @@ meanRAbarCRS <- ggplot(heatmap.CRS.df.meanRA, aes(x = reorder(Genus,meanRA), y =
 meanRAbarCRS
 ```
 ```{r}
-ggsave(meanRAbarCRS, filename = "16S_output/figures/meanRAbarplotCRS.pdf",
-       device ="pdf",
-       height = 3.1,
-      width = .8)
+#ggsave(meanRAbarCRS, filename = "16S_output/figures/meanRAbarplotCRS.pdf",
+#       device ="pdf",
+#       height = 3.1,
+#      width = .8)
 ```
 
 
@@ -443,10 +443,10 @@ heatmap.NonCRS.df <- amp_heatmap(ampvis.NonCRS,
 heatmap.NonCRS.df
 ```
 ```{r}
-ggsave(heatmap.NonCRS, 
-       filename = "16S_output/figures/taxaHeatPlotNonCRS.pdf",
-       device = "pdf",
-       height = 3.0)
+#ggsave(heatmap.NonCRS, 
+#       filename = "16S_output/figures/taxaHeatPlotNonCRS.pdf",
+#       device = "pdf",
+#       height = 3.0)
 ```
 
 Make barplot from averages of these numbers
@@ -472,10 +472,10 @@ meanRAbarNonCRS <- ggplot(heatmap.NonCRS.df.meanRA, aes(x = reorder(Genus,meanRA
 meanRAbarNonCRS
 ```
 ```{r}
-ggsave(meanRAbarNonCRS, filename = "16S_output/figures/meanRAbarplotNonCRS.pdf",
-       device ="pdf",
-       height = 3.1,
-       width = 0.8)
+#ggsave(meanRAbarNonCRS, filename = "16S_output/figures/meanRAbarplotNonCRS.pdf",
+#       device ="pdf",
+#       height = 3.1,
+#       width = 0.8)
 ```
 
 ### Plot Grid
@@ -636,8 +636,8 @@ taxname.db <- select(taxname.db, TaxName, DB) %>%
 prevdf.taxname.top20genera.db <- left_join(prevdf.taxname.top20genera, taxname.db, by = "TaxName")
 ```
 ```{r}
-write_csv(prevdf.taxname.top20genera.db,
-          "16S_output/top20PrevAbun.csv")
+#write_csv(prevdf.taxname.top20genera.db,
+#          "16S_output/top20PrevAbun.csv")
 ```
 
 
@@ -694,7 +694,7 @@ tab
 
 ## Export as a .CSV
 ```{r}
-write_csv(prevdf.taxname.top20genera, "16S_output/top20PrevAbun.csv")
+#write_csv(prevdf.taxname.top20genera, "16S_output/top20PrevAbun.csv")
 ```
 
 # Relative Abundance Boxplots
@@ -840,13 +840,13 @@ ActinoGrid
 ```
 
 ```{r}
-ggsave(ActinoGrid,
-       filename = "16S_output/figures/ActinoBoxplotGrid.pdf",
-       device = "pdf",
-       bg = "transparent",
-      height = 2,
-       width = 5,
-       useDingbats = FALSE)
+#ggsave(ActinoGrid,
+#       filename = "16S_output/figures/ActinoBoxplotGrid.pdf",
+#       device = "pdf",
+#       bg = "transparent",
+#      height = 2,
+#       width = 5,
+#       useDingbats = FALSE)
 ```
 Actinobacteria abundance is significantly higher in CRS subjects with no history of previous FESS.  
 
@@ -1090,10 +1090,10 @@ ActinoBactFuso_grid
 ```
 
 ```{r}
-ggsave(ActinoBactFuso_grid,
-       filename = "16S_output/figures/ActinoBactFusoScatterGrid.pdf",
-       device = "pdf",
-       width = 6, height = 3,
-       useDingbats = FALSE)
+#ggsave(ActinoBactFuso_grid,
+#       filename = "16S_output/figures/ActinoBactFusoScatterGrid.pdf",
+#       device = "pdf",
+#       width = 6, height = 3,
+#      useDingbats = FALSE)
 ```
 
