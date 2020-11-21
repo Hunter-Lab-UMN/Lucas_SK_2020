@@ -1,0 +1,46 @@
+---
+title: "Clinical Data Table"
+---
+```{r}
+library(tidyverse)
+library(phyloseq)
+```
+
+# Load the data:
+```{r}
+# Rarified filtered data used in ordination and picrust
+data <- readRDS("16S_output/phyloseq_unsupervised_filtered_rare.rds")
+data
+```
+
+Clinical Data table:
+Make Supplemental Table 1
+```{r}
+suppTab3 <- data.frame(sample_data(data)) %>%
+  select(Age = DEM_AGE,
+         Sex = DEM_SEX,
+         DIAG_CRS,
+         SNOT20_TOTAL,
+         Polyps = SINUS_FACTORS_POLYPS,
+         GERD = SINUS_FACTORS_GERD,
+         Asthma = SINUS_FACTORS_ASTHMA,
+         Allergies = SINUS_FACTORS_ALLERGIES,
+         'Prior FESS' = SINUS_FACTORS_PRIORFESS,
+         'Number of Prior FESS' = SINUS_FACTORS_NUMFESS,
+         )
+write_csv(suppTab1, path = "16S_output/suppTable3.csv")
+```
+```{r}
+groupedSuppTab3 <- suppTab3 %>%
+  group_by(DIAG_CRS) %>%
+  dplyr::summarise(AverageAge = mean(Age),
+                   sdAge = sd(Age),
+                   AvgSNOT20 = mean(SNOT20_TOTAL, na.rm = TRUE),
+                   sdSNOT20 = sd(SNOT20_TOTAL, na.rm = TRUE),
+                   PercFemale = sum(Sex =="Female")/ length(Sex) *100,
+                   PercPolyps = sum(Polyps == 1)/ length(Polyps) *100,
+                   PercGERD = sum(GERD == 1)/ length(GERD) *100,
+                   PercAsthma = sum(Asthma == 1)/ length(Asthma) *100,
+                   PercAllergies = sum(Allergies == 1)/ length(Allergies) *100)
+write_csv(groupedSuppTab3, path = "16S_output/suppTable3grouped.csv")
+```

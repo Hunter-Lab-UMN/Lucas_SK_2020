@@ -116,16 +116,16 @@ Color is based on the adjusted p-value
 makeMA <- function(x){
   p <- ggmaplot(x, 
                 #fc of 2 corresponds to the log2fc of 1 we tested in our hyp. in the results command
-                fdr = 0.05, fc = 2, size = 2, alpha = 0.8,
+                fdr = 0.05, fc = 2, size = 1.5, alpha = 0.8,
                 palette = c("#DE3E2D", "#1C67BD", "lightgrey"),
                 genenames = as.vector(x$pan_gene_symbol),
-                legend = "right", 
+                legend = "bottom", 
                 top = 25,
                 select.top.method	= "padj",
                 font.label = c(10, "bold", "black"),
                 font.legend = "bold",
                 font.main = "bold",
-                ggtheme = ggpubr::theme_pubr())
+                ggtheme = ggpubr::theme_pubr(base_size = 10))
   p
 }
 ```
@@ -140,9 +140,9 @@ maPlot262 <- makeMA(df262vsMMMGalpha05beta1) + ggtitle("MMMG vs CFS-H")
 maPlot262
 ```
 ```{r include = FALSE}
-ggsave(maPlot234, filename = "rnaseq_output/maplot243vsMMMG.pdf", height=5, width=7)
-ggsave(maPlot243, filename = "rnaseq_output/maplot234vsMMMG.pdf", height=5, width=7)
-ggsave(maPlot262, filename = "rnaseq_output/maplot262vsMMMG.pdf", height=5, width=7)
+ggsave(maPlot234, filename = "rnaseq_output/maplot234vsMMMG.pdf", height=4, width=4)
+ggsave(maPlot243, filename = "rnaseq_output/maplot243vsMMMG.pdf", height=4, width=4)
+ggsave(maPlot262, filename = "rnaseq_output/maplot262vsMMMG.pdf", height=4, width=4)
 ```
 
 # Differential Abundance: Sample vs. Control

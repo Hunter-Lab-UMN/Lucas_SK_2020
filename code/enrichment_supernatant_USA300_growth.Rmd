@@ -1,0 +1,598 @@
+---
+title: "Staphylococcus aureus growth on MMM supernatants (Batch: 06SEP2019) from CRS mucin degrading communities"
+author: "Sarah Lucas"
+date: "09-20-2019"
+---
+
+# Purpose:
+Growth curves were performed with S. aureus strain LAC (USA300) in 8 different supernatants derived from the growth of mucin-degrading microbial communities isolated from CRS patient sinus mucus on minimal mucin medium (batch: 06SEP2019)
+
+# Environment
+## Package Loading
+```{r echo=TRUE, results=FALSE}
+library("tidyverse", quietly = TRUE)
+library("lubridate", quietly = TRUE)
+library("extrafont", quietly = TRUE)
+library("scales", quietly = TRUE)
+library("hms", quietly = TRUE)
+library("exploratory", quietly = TRUE)
+library("ggpubr", quietly = TRUE)
+library("svglite")
+library("growthcurver")
+```
+## Aesthetics
+```{r results=FALSE}
+cbPal <- c("pink","#E69F00","#56B4E9","#009E73","#F0E442", "#0072B2","#75437C","#B52F25") 
+
+cbPal_MMM <- c("darkgrey","pink","#E69F00","#56B4E9","#009E73","#F0E442", "#0072B2","#75437C","#B52F25") 
+
+theme_transparent <- theme(panel.background = element_rect(fill = "transparent"),
+                           plot.background = element_rect(fill = "transparent", 
+                                                        color = NA),
+                           panel.grid.major = element_line(color = "transparent"),
+                           panel.grid.minor = element_line(color = "transparent"),
+                           legend.background = element_rect(fill = "transparent"), 
+                           legend.box.background = element_rect(fill = "transparent", 
+                                                                color = "transparent")
+)
+
+```
+## Experiemntal Parameters to fill in: Media in plate
+```{r results=FALSE}
+Medium.A <- "Super164"
+Medium.B <- "Super222"
+Medium.C <- "Super230"
+Medium.D <- "Super234"
+Medium.E <- "Super235"
+Medium.F <- "Super243"
+Medium.G <- "Super260"
+Medium.H <- "Super262"
+```
+## Experiemntal Parameters to fill in: Samples in wells
+```{r results=FALSE}
+Bio1 <- "LAC1"
+Bio2 <- "LAC2"
+Bio3 <- "LAC3"
+Bio4 <- "Medium_Control"
+```
+# Data import and tidying
+```{r}
+#data_read0 <- read_tsv("~/Documents/MICaB/Hunter_Lab/Projects/inProgress/Staphylococcus_aureus_experiments/data/Growth_Curves/Supernatant_Growth_Curves/Supernatant_Growth_Curves_LAC_11SEP2019.txt", skip = 31) %>%
+#  slice(1) %>%
+#  select(Well:H12, Time = Well) %>%
+#  mutate_all(as.numeric)
+
+#data_read0$Time <- as.hms(data_read0$Time)
+#data_read0[1,1] <-as.hms(00:00:00)
+
+data_read1 <- read_tsv("../data/enrichment/USA300_growth/Supernatant_Growth_Curves_LAC_11SEP2019.txt", skip = 34) %>% # skip 36 for the non-zero timepoint data
+  select(-contains("600")) 
+
+data_read1$Time <- as.hms(data_read1$Time)
+
+# Combine data types together (use if using the T0 numbers)
+#data <- bind_rows(data_read0, data_read1) 
+
+data <- data_read1 <- data_read1 %>% #Use this line if not using the T0 numbers
+  gather(key = Well, value = OD600, A1:H12) %>%
+  separate(Well, into = c("rowx","Column"), sep = "[[:alpha:]]", remove = FALSE) %>%
+  separate(Well, into = c("Row","columnx"), sep = "[[:digit:]]", remove = FALSE) %>%
+  select(Time, Well, Row, Column, OD600) %>%
+  mutate(Medium = ifelse(Row == "A", Medium.A,
+                         ifelse(Row == "B", Medium.B, 
+                                ifelse(Row == "C", Medium.C, 
+                                       ifelse(Row == "D", Medium.D, 
+                                              ifelse(Row == "E", Medium.E, 
+                                                     ifelse(Row == "F", Medium.F, 
+                                                            ifelse(Row == "G", Medium.G, 
+                                                                   Medium.H)))))))) %>%
+  mutate(BioRep = ifelse(Column %in% 1:3, Bio1,
+                         ifelse(Column %in% 4:6, Bio2,
+                                ifelse(Column %in% 7:9, Bio3,
+                                       Bio4)))) %>%
+  mutate(difftime = as.numeric(abs(difftime(start_time, Time, units = "hours"))))
+
+data$Column <- as.numeric(data$Column)
+```
+## Whole plate growth curves
+```{r}
+GC_plate_plot <- ggplot(data, aes(x=difftime, y=OD600, color = Medium)) + 
+  facet_grid(Row ~ Column) +
+  theme_classic() + 
+  geom_line(size = 1) +
+  scale_color_manual(values = c(cbPal)) +
+  scale_y_log10()+
+  annotation_logticks(base = 10, 
+                      sides = "l"
+                      ) +
+  labs(x = "", y = "") +
+  theme(legend.position = "right", 
+        axis.text = element_text(color = "black", size = 6, face = "bold"),
+        panel.grid.major = element_line(color = "grey"),
+        panel.grid.minor = element_line(color = "grey")
+        )
+GC_plate_plot
+```
+## Normalize
+Subtract data blanks at each time point for each medium. Calculate average OD600 readings. Tidy data for plotting.
+```{r}
+data_samples <- data %>%
+  filter(BioRep != "Medium_Control")
+  
+data_blanks <- data %>%
+  filter(BioRep == "Medium_Control") %>%
+  group_by(Medium, Time) %>%
+  # Get the average blank value for each supernatant at each timepoint
+  dplyr::summarize(blank_mean_OD600 = mean(OD600))
+
+#Combine data back together
+data_join <- left_join(data_samples, data_blanks)
+data_join_blank <- data_join %>%
+  mutate(blanked_OD600 = OD600 - blank_mean_OD600)
+```
+## Summarize
+Get the mean and standard deviation for each supernatant at each timepoint for plotting
+```{r}
+data_join_summarized <- data_join_blank %>%
+  group_by(Medium, Time, difftime) %>%
+  dplyr::summarize(mean_blanked_OD600 = mean(blanked_OD600), sd_blanked_OD600 = sd(blanked_OD600)) %>%
+  ungroup()
+data_join_summarized$Time <- hms::as.hms(data_join_summarized$Time)
+```
+# Plot Growth Curves
+## Filter for plotting points and error bars
+```{r}
+# Filter dataset to just include data from first 12 hours of growth curve
+data_join_summarized_filt_12Hr <- filter(data_join_summarized, Time < as.hms("12:00:00"))
+
+# For plotting points and error bars, just filter data to hourly 
+# timepoints instead of half hours
+data_join_filt_12Hr_error <- filter(data_join_summarized_filt_12Hr, minute(Time) == 29)
+data_join_summarized_error <- filter(data_join_summarized, minute(Time) == 29)
+```
+
+
+## Plot
+Growth curves are plotted at half hour intervals, while points and error bars are plotted at hourly intervals to avoid overplotting and enable readability of the graph.
+```{r}
+# plotting points and error bars for when they overlap
+pd <- position_dodge(0.1) # move them .05 to the left and right
+# Plot
+GC_plot_sd <- ggplot(data_join_summarized_filt_12Hr) +
+  geom_line(aes(x=difftime, y=mean_blanked_OD600, color = Medium), size = .8) +
+  geom_errorbar(data = data_join_filt_12Hr_error, 
+                mapping = aes(x = difftime, 
+                              ymin = mean_blanked_OD600-sd_blanked_OD600, 
+                              ymax = mean_blanked_OD600+sd_blanked_OD600, 
+                              color = Medium), position = pd, size = .5, alpha = .6) +
+  geom_point(data = data_join_filt_12Hr_error, 
+             mapping = aes(x = difftime, 
+                           y = mean_blanked_OD600, 
+                           color = Medium)) +
+  scale_color_manual(breaks = c("Super164",
+                                "Super222",
+                                "Super230",
+                                "Super234",
+                                "Super235",
+                                "Super243",
+                                "Super260",
+                                "Super262"), 
+                     labels = c("A",
+                                "B",
+                                "C",
+                                "D",
+                                "E",
+                                "F",
+                                "G", 
+                                "H"), 
+                     name = "Supernatant", 
+                     values = cbPal) +
+  scale_y_log10(limits = c(.01,.6), breaks = c(.01,.1,.5)) +
+  scale_x_continuous(limits = c(0,12), breaks = c(0,3,6,9,12)) +
+  annotation_logticks(base = 10, sides = "l") +
+  labs(x = "Time (hrs)", y = expression(paste("O.D."[600][nm]))) +
+  theme_pubr(base_size = 10) + 
+  theme(legend.position = "right"#,
+#        panel.grid.major = element_line(color = "grey")
+)
+#  theme_transparent
+GC_plot_sd
+```
+```{r}
+#ggsave(GC_plot_sd, 
+#       filename = "../figures/LAC_aerobic_GC_06SEP2019Supernatants.pdf", 
+#       useDingbats = FALSE, 
+#       height = 3,
+#      width = 4,
+#       device = "pdf")
+```
+
+
+```{r fig.height = 6, fig.width = 8}
+high_samples <- c("Super243","Super262","Super234")
+med_samples <- c("Super222","Super260","Super230")
+low_samples <- c("Super235","Super164")
+```
+```{r}
+data_join_filt_high <- filter(data_join_summarized_filt_12Hr, Medium %in% high_samples)
+data_join_filt_med <- filter(data_join_summarized_filt_12Hr, Medium %in% med_samples)
+data_join_filt_low <- filter(data_join_summarized_filt_12Hr, Medium %in% low_samples)
+```
+
+```{r}
+# plotting points and error bars for when they overlap
+pd <- position_dodge(0.1) # move them .05 to the left and right
+# Plot
+GC_plot_sd_low <- ggplot(data_join_filt_low) +
+  geom_line(aes(x=difftime, y=mean_blanked_OD600, color = Medium), size = .8) +
+  geom_ribbon(aes(ymin = mean_blanked_OD600-sd_blanked_OD600, 
+                  ymax = mean_blanked_OD600+sd_blanked_OD600, 
+                  x=difftime, fill = Medium), alpha = 0.2) +
+  scale_color_manual(breaks = c("Super164","Super235"), 
+                     labels = c("A","E"), 
+                     name = "Supernatant", 
+                     values = c("pink","#F0E442")) +
+  scale_fill_manual(breaks = c("Super164","Super235"), 
+                     labels = c("A","E"), 
+                     name = "Supernatant", 
+                     values = c("pink","#F0E442")) +
+  scale_y_log10(limits = c(.01,.6), breaks = c(.01,.1,.5)) +
+  scale_x_continuous(limits = c(0,12), breaks = c(0,3,6,9,12)) +
+  annotation_logticks(base = 10, sides = "l", color = "white") +
+  labs(x = "Time (hrs)", y = expression(paste("O.D."[600][nm]))) +
+  theme_pubr(base_size = 10) + 
+  theme(axis.ticks = element_line(color = "white"),
+        axis.line = element_line(color = "white"),
+        axis.text = element_text(color = "white"),
+        axis.title = element_text(color = "white"),
+        legend.position = "right",
+        legend.text = element_text(color = "white", size = 8),
+        legend.title = element_text(color = "white", size = 8)) +
+  theme_transparent +
+  guides(fill = FALSE)
+GC_plot_sd_low
+```
+```{r}
+#ggsave(GC_plot_sd_low, 
+#       filename = "../figures/LAC_aerobic_GC_06SEP2019Supernatants_low_ribbon.png", 
+#       bg = "transparent",
+#       height = 3,
+#       width = 4,
+#       device = "png")
+```
+
+```{r}
+# plotting points and error bars for when they overlap
+pd <- position_dodge(0.1) # move them .05 to the left and right
+# Plot
+GC_plot_sd_med <- ggplot(data_join_filt_med) +
+  geom_line(aes(x=difftime, y=mean_blanked_OD600, color = Medium), size = .8) +
+  geom_ribbon(aes(ymin = mean_blanked_OD600-sd_blanked_OD600, 
+                  ymax = mean_blanked_OD600+sd_blanked_OD600, 
+                  x=difftime, fill = Medium), alpha = 0.2) +
+  scale_color_manual(breaks = c("Super222","Super230","Super260"), 
+                     labels = c("B","C","G"), 
+                     name = "Supernatant", 
+                     values = c("#E69F00","#56B4E9","#75437C") ) +
+  scale_fill_manual(breaks = c("Super222","Super260","Super230"), 
+                     labels = c("B","C","G"), 
+                     name = "Supernatant", 
+                     values = c("#E69F00","#56B4E9","#75437C") ) +
+  scale_y_log10(limits = c(.01,.6), breaks = c(.01,.1,.5)) +
+  scale_x_continuous(limits = c(0,12), breaks = c(0,3,6,9,12)) +
+  annotation_logticks(base = 10, sides = "l", color = "white") +
+  labs(x = "Time (hrs)", y = expression(paste("O.D."[600][nm]))) +
+  theme_pubr(base_size = 10) + 
+  theme(axis.ticks = element_line(color = "white"),
+        axis.line = element_line(color = "white"),
+        axis.text = element_text(color = "white"),
+        axis.title = element_text(color = "white"),
+        legend.position = "right",
+        legend.text = element_text(color = "white", size = 8),
+        legend.title = element_text(color = "white", size = 8)) +
+  theme_transparent +
+  guides(fill = FALSE)
+GC_plot_sd_med
+```
+
+```{r}
+#ggsave(GC_plot_sd_med, 
+#       filename = "../figures/LAC_aerobic_GC_06SEP2019Supernatants_med_ribbon.png", 
+#       bg = "transparent",
+#       height = 3,
+#       width = 4,
+#       device = "png")
+```
+
+```{r}
+# plotting points and error bars for when they overlap
+# Plot
+GC_plot_sd_high <- ggplot(data_join_filt_high) +
+  geom_line(aes(x=difftime, y=mean_blanked_OD600, color = Medium), size = .8) +
+  geom_ribbon(aes(ymin = mean_blanked_OD600-sd_blanked_OD600, 
+                  ymax = mean_blanked_OD600+sd_blanked_OD600, 
+                  x=difftime, fill = Medium), alpha = 0.2) +
+  scale_color_manual(breaks = c("Super243","Super262","Super234"), 
+                     labels = c("D","F","H"), 
+                     name = "Supernatant", 
+                     values = c("#009E73","#0072B2","#B52F25")) +
+  scale_fill_manual(breaks = c("Super234","Super243","Super262"), 
+                     labels = c("D","F","H"), 
+                     name = "Supernatant", 
+                     values = c("#009E73","#0072B2","#B52F25")) +
+  scale_y_log10(limits = c(.01,.6), breaks = c(.01,.1,.5)) +
+  scale_x_continuous(limits = c(0,12), breaks = c(0,3,6,9,12)) +
+  annotation_logticks(base = 10, sides = "l", color = "white") +
+  labs(x = "Time (hrs)", y = expression(paste("O.D."[600][nm]))) +
+  theme_pubr(base_size = 10) + 
+  theme(axis.ticks = element_line(color = "white"),
+        axis.line = element_line(color = "white"),
+        axis.text = element_text(color = "white"),
+        axis.title = element_text(color = "white"),
+        legend.position = "right",
+        legend.text = element_text(color = "white", size = 8),
+        legend.title = element_text(color = "white", size = 8)) +
+  theme_transparent +
+  guides(fill = FALSE)
+GC_plot_sd_high
+```
+
+```{r}
+#ggsave(GC_plot_sd_high, 
+#       filename = "../figures/LAC_aerobic_GC_06SEP2019Supernatants_high_ribbon.png", 
+#       bg = "transparent",
+#       height = 3,
+#       width = 4,
+#       device = "png")
+```
+
+
+```{r}
+# plotting points and error bars for when they overlap
+# Plot
+GC_plot_sd_ribbon <- ggplot(data_join_summarized_filt_12Hr) +
+  geom_line(aes(x=difftime, y=mean_blanked_OD600, color = Medium), size = .8) +
+  geom_ribbon(aes(ymin = mean_blanked_OD600-sd_blanked_OD600, 
+                  ymax = mean_blanked_OD600+sd_blanked_OD600, 
+                  x=difftime, fill = Medium), alpha = 0.2) +
+  scale_color_manual(breaks = c("Super164",
+                                "Super222",
+                                "Super230",
+                                "Super234",
+                                "Super235",
+                                "Super243",
+                                "Super260",
+                                "Super262"), 
+                     labels = c("A",
+                                "B",
+                                "C",
+                                "D",
+                                "E",
+                                "F",
+                                "G", 
+                                "H"), 
+                     name = "Supernatant", 
+                     values = cbPal) +
+  scale_fill_manual(breaks = c("Super164",
+                                "Super222",
+                                "Super230",
+                                "Super234",
+                                "Super235",
+                                "Super243",
+                                "Super260",
+                                "Super262"), 
+                     labels = c("A",
+                                "B",
+                                "C",
+                                "D",
+                                "E",
+                                "F",
+                                "G", 
+                                "H"), 
+                     name = "Supernatant", 
+                     values = cbPal) +
+  scale_y_log10(limits = c(.01,.6), breaks = c(.01,.1,.5)) +
+  scale_x_continuous(limits = c(0,12), breaks = c(0,3,6,9,12)) +
+  annotation_logticks(base = 10, sides = "l", color = "white") +
+  labs(x = "Time (hrs)", y = expression(paste("O.D."[600][nm]))) +
+  theme_pubr(base_size = 10) + 
+  theme(axis.ticks = element_line(color = "white"),
+        axis.line = element_line(color = "white"),
+        axis.text = element_text(color = "white"),
+        axis.title = element_text(color = "white"),
+        legend.position = "right",
+        legend.text = element_text(color = "white", size = 8),
+        legend.title = element_text(color = "white", size = 8)) +
+  theme_transparent +
+  guides(fill = FALSE)
+GC_plot_sd_ribbon
+```
+```{r}
+#ggsave(GC_plot_sd_ribbon, 
+#       filename = "../figures/LAC_aerobic_GC_06SEP2019Supernatants_ribbon.png", 
+#       bg = "transparent",
+#       height = 3,
+#       width = 4,
+#       device = "png")
+```
+
+
+# Anaerobic Data
+## Load data 
+Growth data is OD600 reading of a 96well plate after 15 seconds of shaking (with lid off to avoid condensation) from 24 hour anaerobic growth of S. aureus LAC on the 8 different supernatants from supernatant batch 06SEP2019.
+```{r}
+anaerobic_supers <- read_csv(file = "../data/enrichment/USA300_growth/12SEPT2019_Anaerobic_and_Nitrate_OD600_plateread_long.csv")
+# Pull out MMM growth data to compare plots
+anaerobic_MMM <- read_tsv(file = "../data/enrichment/USA300_growth/24Hr_Anaerobic_Growth_MMM-CAA-Lactate_30AUG2019.txt") %>%
+  filter(Medium == "MMM")
+# Bind two datasets together
+anaerobic <- rbind(anaerobic_supers, anaerobic_MMM)
+anaerobic
+```
+
+## Normalize
+Subtract data blanks at each time point for each medium. Calculate average OD600 readings. Tidy data for plotting.
+```{r}
+# Separate out samples from blanks
+anaerobic_samples <- anaerobic %>%
+  filter(BioRep != "Blank")
+
+anaerobic_blanks <- anaerobic %>%
+  filter(BioRep == "Blank") %>%
+  group_by(Medium,GrowthCondition) %>%
+  # Get the mean of the three blank wells for each of the supernatants. 
+  # This number will be used to blank the remaining wells of each row.
+  summarize(blank_mean_OD600 = mean(OD600)) 
+
+# Combine data back together, with a new column for averaged blanks
+anaerobic_data_join <- left_join(anaerobic_samples, anaerobic_blanks)
+anaerobic_data_join
+
+# Subtract average blank for each supernatant from each well at each timepoint.
+anaerobic_data_blank <- anaerobic_data_join %>%
+  mutate(blanked_OD600 = OD600 - blank_mean_OD600)
+
+# Different filtering steps
+anaerobic_data_blank_noLAC1 <- filter(anaerobic_data_blank, !BioRep == "LAC1")
+anaerobic_data_blank_noNitrate <- filter(anaerobic_data_blank, GrowthCondition == "Anaerobic")
+anaerobic_data_blank_Nitrate <- filter(anaerobic_data_blank, !GrowthCondition == "Anaerobic")
+
+
+```
+
+## Summarize
+```{r}
+# For barplots - summarized data for each medium/condition
+anaerobic_data_summarize <- anaerobic_data_blank %>%
+  group_by(Medium, GrowthCondition) %>%
+  summarize(sd_blanked_OD600 = sd(blanked_OD600), blanked_OD600 = mean(blanked_OD600)) %>%
+  ungroup()
+```
+
+## Plot  
+
+Use pubr package to put stats on the graph: benefits are, easy plotting syntax, and easy addition of statistics
+```{r}
+ttest_compare <- compare_means(blanked_OD600 ~ PlotLetter,  data = anaerobic_data_blank, ref.group = "MMM",
+              method = "t.test", group.by = "GrowthCondition")
+ttest_compare
+```
+concerned here that the adjusted p-values are for all of the 16 comparisons, and not just 8; that the testing does not abide by the "group.by" behavior. But what I am reporting on the graph is just the regular P-value.
+
+```{r}
+# fig.height = 3, fig.width = 4, fig.alight="center"
+pubbarplot <- ggbarplot(anaerobic_data_blank, 
+                        x = "PlotLetter", y = "blanked_OD600",
+                        add = c("mean_sd"#, 
+                                #"point"
+                                ),
+                        facet.by = "GrowthCondition",
+                        color = "black", 
+                        fill = "Medium", palette = cbPal_MMM, 
+                        ggtheme = theme_pubr(base_size = 10)) +
+  scale_x_discrete(limits = c("MMM","A","B","C","D","E","F","G","H")) +
+  scale_y_continuous(limits = c(-.005,.12), breaks = c(0,.02,.04, .06, .08,.1)) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks = element_line(color = "black")) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks = element_line(color = "black"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(axis.ticks = element_line(color = "black"),
+        axis.line = element_line(color = "black"),
+        axis.text = element_text(color = "black"),
+        axis.title = element_text(color = "black")) 
+  labs(y = expression(paste("O.D."[600][nm]))) +
+  # add adjusted p-value stats to plot
+  stat_pvalue_manual(ttest_compare, label = "p.signif", 
+                     y.position = 0.09, 
+                     remove.bracket = TRUE, 
+                     color = "black")
+
+pubbarplot 
+```
+
+```{r}
+ggsave(pubbarplot, 
+       filename = "enrichment_output/LAC_anaerobic_24hr_barplot.pdf", 
+       useDingbats = FALSE, 
+       height = 3,
+       width = 5,
+       device = "pdf")
+```
+
+
+# Growthcurver package method
+
+Using GrowthcurvR package to analyze curves using already blanked data from data_join_blank
+Convert time from data_join_blank from a time variable to elapsed time in minutes using difftime from the lubridate package
+
+```{r}
+start_time <- as.hms(00:00:00)
+data_join_blank$Well <- as.character(data_join_blank$Well)
+growthdata <- data_join_blank %>%
+  mutate(time = as.numeric(abs(difftime(start_time, Time, units = "hours")))) %>%
+  arrange(time, Column) %>%
+  select(time, Well, blanked_OD600) %>%
+  pivot_wider(names_from = Well, values_from = blanked_OD600)
+head(growthdata)
+```
+Run Growthplater function SummarizeGrowthByPlate to get growth rate, generation time, etc.
+```{r}
+gc_out <- SummarizeGrowthByPlate(growthdata, t_trim = 12, bg_correct = "none")
+```
+Add Medium assignments to data frame and create a summary table
+```{r}
+gc_out_medium <- gc_out %>%
+  separate(sample, into = c("rowx","Column"), sep = "[[:alpha:]]", remove = FALSE) %>%
+  separate(sample, into = c("Row","columnx"), sep = "[[:digit:]]", remove = FALSE) %>%
+  select(Row, Column, k, n0, r, t_mid, t_gen, auc_l, auc_e, sigma) %>%
+  mutate(Medium = ifelse(Row == "A", Medium.A,
+                         ifelse(Row == "B", Medium.B, 
+                                ifelse(Row == "C", Medium.C, 
+                                       ifelse(Row == "D", Medium.D, 
+                                              ifelse(Row == "E", Medium.E, 
+                                                     ifelse(Row == "F", Medium.F, 
+                                                            ifelse(Row == "G", Medium.G, 
+                                                                   Medium.H))))))))
+gc_out_summary <- gc_out_medium %>%
+  select(-Column) %>%
+  group_by(Medium,Row) %>%
+  summarize_all(list(mean))
+```
+Check assumptions for ANOVA
+```{r}
+res.aov <- aov(r ~ Medium, data = gc_out_medium)
+summary(res.aov)
+plot(res.aov, 1) # heteroscedacity
+plot(res.aov, 2) # normality
+
+library(car)
+leveneTest(r ~ Medium, data = gc_out_medium) # test to see if an anova is appropriate
+```
+
+```{r}
+# fig.height = 3, fig.width = 4, fig.alight="center"
+growthrate_boxplot <- ggboxplot(gc_out_medium, 
+                        x = "Row", y = "r",
+                        add = c("point"),
+                        color = "black", fill = "Medium", palette = cbPal, 
+                        ggtheme = theme_pubr(base_size = 14)) +
+#  scale_x_discrete(limits = c("A","B","C","D","E","F","G","H")) +
+#  scale_y_continuous(limits = c(-.005,.12), breaks = c(0,.02,.04, .06, .08,.1, .12)) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks = element_line(color = "black")) +
+  theme_transparent +
+  labs(y = "Growth Rate (r)") +
+  stat_compare_means(method = "anova")
+
+  # add adjusted p-value stats to plot
+#  stat_pvalue_manual(ttest_compare, label = "p.signif", y.position = -0.005, remove.bracket = TRUE)
+
+growthrate_boxplot 
+```

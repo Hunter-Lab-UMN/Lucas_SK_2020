@@ -5,3 +5,7 @@
 *.BAM.summary
 *.rds
 .Rproj.user
+
+
+# ignore directories
+data/rnaseq/GCF_ASM1346v1

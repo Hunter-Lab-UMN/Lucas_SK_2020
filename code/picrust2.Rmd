@@ -341,6 +341,8 @@ CRStop10CAZyClass <- ggplot(CRStop10relabunfun_summary_long, aes(x= CAZyClassSum
         axis.text.y = element_text(color = "black"),
         axis.ticks = element_blank(),
         axis.title = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
         plot.margin = unit(c(0,0,0,0), "cm"))
 CRStop10CAZyClass
 ```
@@ -363,7 +365,10 @@ boxplotCRS <- ggboxplot(data = pred_meta_EC_contrib_CAZy_top10CRS_top10relabunfu
   theme(axis.title = element_blank(),
         #axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
+        axis.ticks.x = element_line(color = "black"),
         panel.grid.major.y = element_line(color = "black"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
         legend.position = "",
         plot.margin = unit(c(0,0.1,0,0), "cm"))
 boxplotCRS
@@ -398,14 +403,17 @@ CRStop10Bar <- ggplot(CRSTop10Taxa,
   coord_flip() +
   scale_x_discrete(breaks = orderECsCRS,
                    limits = orderECsCRS) +
+  scale_y_continuous(limits = c(0,80)) +
   theme_pubclean(base_size = 9) +
   theme(#axis.text.x = element_text(angle = 90, hjust = 1, size = 8),
         axis.title = element_blank(),
         #axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
+        axis.ticks.x = element_line(color = "black"),
         axis.text.x = element_text(color = "black"),
         panel.grid.major.y = element_line(color = "black"),
         panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
         legend.position = "right",
         legend.title = element_blank(),
         legend.text = element_text(size = 8),
@@ -438,7 +446,7 @@ top10TaxaNonCRS <- c("Moraxella","Staphylococcus","Corynebacterium","Streptococc
 ```{r}
 pred_meta_EC_contrib_CAZy_top10NonCRS <- pred_meta_EC_contrib_CAZy %>%
   mutate(GenusFamily = ifelse(!is.na(Genus), Genus, Family)) %>%
-  filter(DIAG_CRS == "Healthy") %>%
+  filter(DIAG_CRS == "Non-CRS") %>%
   filter(GenusFamily %in% top10TaxaNonCRS) %>%
   filter(!is.na(CAZyClass))
 ```
@@ -487,6 +495,8 @@ NonCRStop10CAZyClass <- ggplot(NonCRStop10relabunfun_summary_long, aes(x= CAZyCl
         axis.text.y = element_text(color = "black"),
         axis.ticks = element_blank(),
         axis.title = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
         plot.margin = unit(c(0,0,0,0), "cm"))
 NonCRStop10CAZyClass
 ```
@@ -510,6 +520,9 @@ boxplotNonCRS <- ggboxplot(data = pred_meta_EC_contrib_CAZy_top10NonCRS_top10rel
         #axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
         panel.grid.major.y = element_line(color = "black"),
+        axis.ticks = element_line(color = "black"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
         legend.position = "",
         plot.margin = unit(c(0,0.1,0,0), "cm"))
 boxplotNonCRS
@@ -540,14 +553,17 @@ NonCRStop10Bar <- ggplot(NonCRSTop10Taxa,
   coord_flip() +
   scale_x_discrete(breaks = orderECsNonCRS,
                    limits = orderECsNonCRS) +
+  scale_y_continuous(limits = c(0,80)) +
   theme_pubclean(base_size = 9) +
   theme(#axis.text.x = element_text(angle = 90, hjust = 1, size = 8),
         axis.title = element_blank(),
         #axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
+        axis.ticks = element_line(color = "black"),
         axis.text.x = element_text(color = "black"),
         panel.grid.major.y = element_line(color = "black"),
         panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
         legend.position = "right",
         legend.title = element_blank(),
         legend.text = element_text(size = 8),
@@ -564,9 +580,25 @@ NonCRSgrid <- plot_grid(NonCRStop10CAZyClass,
 NonCRSgrid
 ```
 ```{r}
-ggsave(NonCRSgrid, filename = "picrust2_output/figures/CRSTop10ComboTaxFilt.pdf",
+ggsave(NonCRSgrid, filename = "picrust2_output/figures/NonCRSTop10ComboTaxFilt.pdf",
        device = "pdf",
       height = 3,
        width = 8,
        useDingbats = FALSE)
 ```
+
+
+```{r}
+CRSnonCRSgrid <- plot_grid(CRSgrid, NonCRSgrid,
+                           nrow = 2,
+                           align = "hv")
+CRSnonCRSgrid
+```
+```{r}
+ggsave(CRSnonCRSgrid, filename = "picrust2_output/figures/Figure2grid.pdf",
+       device = "pdf",
+      height = 3,
+       width = 8,
+       useDingbats = FALSE)
+```
+

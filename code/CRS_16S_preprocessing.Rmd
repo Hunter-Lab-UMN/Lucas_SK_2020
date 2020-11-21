@@ -36,7 +36,8 @@ sapply(c(.cran_packages, .bioc_packages), package.version)
 Load in all components created in the DADA2 analysis and the sample sheet
 ```{r}
 samdf <- readRDS("../data/16S/samdf_LucasSK_2020.rds")
-samdf <- data.frame(samdf)
+samdf <- data.frame(samdf) %>%
+  mutate(DIAG_CRS = ifelse(DIAG_CRS == "Healthy", "Non-CRS", "CRS"))
 rownames(samdf) <- samdf$SAMPLE_NAME #because R - dplyr will not like making rownames, but it's fine for now.
 # seqtab is the sample:ASV table made in DADA2 - it should contain all samples and ASVs
 # Filter out samples that are CF positive for this analysis
@@ -119,7 +120,7 @@ CRS and non-CRS numbers:
 ```{r}
 diagCRS <- subset_samples(CRS0, DIAG_CRS == "CRS")
 diagCRS
-diagNOCRS <- subset_samples(CRS0, DIAG_CRS == "Healthy")
+diagNOCRS <- subset_samples(CRS0, DIAG_CRS == "Non-CRS")
 diagNOCRS
 ```
 
@@ -217,7 +218,7 @@ prevdf.phylum
 ```
 Yes. Looks like there are some phyla that have quite low prevalence. Let's filter out any features belonging to phyla that have an average prevalence of just 1, or have features seen less than 10 times in the dataset:
 ```{r}
-prevdf.phylum.filt <- filter(prevdf.phylum, mean_feature_prevalence <= 1.012097 | total_feature_prevalence < 10)
+prevdf.phylum.filt <- filter(prevdf.phylum, mean_feature_prevalence <= 1.012 | total_feature_prevalence < 10)
 prevdf.phylum.filt
 ```
 Remove the features belonging to these phyla in prevdf.phylum.filt from the dataset, creating CRS.pv.2

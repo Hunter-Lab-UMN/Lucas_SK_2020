@@ -1,5 +1,6 @@
 ---
 title: "Abundance Analysis - Top Taxa"
+output: word_document
 ---
 # Setup
 ```{r}
@@ -48,7 +49,7 @@ sample_data(data) <- samdf
 ```{r}
 CRS <- subset_samples(data, DIAG_CRS == "CRS") %>% filter_taxa(.,function(x) sum(x) > 0, TRUE)
 CRS
-nonCRS <- subset_samples(data, DIAG_CRS == "Healthy") %>% filter_taxa(.,function(x) sum(x) > 0, TRUE)
+nonCRS <- subset_samples(data, DIAG_CRS == "Non-CRS") %>% filter_taxa(.,function(x) sum(x) > 0, TRUE)
 nonCRS
 ```
 What is the relative abundance of each phylum?
@@ -92,7 +93,6 @@ round(sum(top5PhyNonCRS$Percent), 2)
 ```{r}
 top5PhyNonCRS
 ```
-The top 5 Phyla are different in CRS and Non-CRS samples. CRS is characterized by Proteobacteria, Firmicutes, Bacteroidetes, Fusobacteria, and Actinobacteria. Conversly, the top 5 phyla in Non-CRS samples is Proteobacteria, Firmicutes, Actinobacteria, Bacteroidetes, and Fusobacteria. Actinobacteria makes up 23% of ASVs in CRS, while only 3% in CRS samples.
 
 ## Description of data: genus-level summary of CRS samples
 ```{r}
@@ -205,7 +205,7 @@ dataPhylumPropMeltCRS <- dataPhylumPropMelt %>%
   dplyr::arrange(DIAG_CRS, PhylumOther, desc(Abundance)) 
 
 dataPhylumPropMeltNonCRS <- dataPhylumPropMelt %>%
-  filter(DIAG_CRS == "Healthy") %>%
+  filter(DIAG_CRS == "Non-CRS") %>%
   dplyr::arrange(DIAG_CRS, PhylumOther, desc(Abundance)) 
 
   
@@ -325,7 +325,7 @@ ampvis.obj
 # Split inot two datasets for CRS and Non-CRS samples
 ampvis.CRS <- amp_subset_samples(ampvis.obj, DIAG_CRS == "CRS")
 ampvis.CRS
-ampvis.NonCRS <- amp_subset_samples(ampvis.obj, DIAG_CRS == "Healthy")
+ampvis.NonCRS <- amp_subset_samples(ampvis.obj, DIAG_CRS == "Non-CRS")
 ampvis.NonCRS
 ```
 ## Heatmaps
@@ -351,15 +351,14 @@ heatmap.CRS <- amp_heatmap(ampvis.CRS,
         legend.position = "",
         legend.title = element_blank(),
         plot.margin = unit(c(0,0,0,0), "cm")
-  ) + scale_x_discrete(expand = c(0,3)) + scale_y_discrete(expand = c(0,0)) #+ coord_fixed(ratio=1)
+  ) + scale_x_discrete(expand = c(0,3)) + scale_y_discrete(expand = c(0,0)) + coord_fixed(ratio=2/1)
 heatmap.CRS
 ```
 ```{r}
 ggsave(heatmap.CRS, 
        filename = "16S_output/figures/taxaHeatPlotCRS.pdf",
        device = "pdf",
-       height = 3,
-       width = 8.5)
+       height = 3)
 ```
 Get abundance dataframe for the heatmap
 ```{r}
@@ -426,8 +425,8 @@ heatmap.NonCRS <- amp_heatmap(ampvis.NonCRS,
         plot.margin = margin(0,0,0,0, unit = "cm"),
         ) + 
   scale_x_discrete(expand = c(0,3)) + 
-  scale_y_discrete(expand = c(0,0)) #+ 
-  #coord_fixed(ratio=1)
+  scale_y_discrete(expand = c(0,0)) + 
+  coord_fixed(ratio = 2/1)
 
 
 heatmap.NonCRS
@@ -447,8 +446,7 @@ heatmap.NonCRS.df
 ggsave(heatmap.NonCRS, 
        filename = "16S_output/figures/taxaHeatPlotNonCRS.pdf",
        device = "pdf",
-       height = 3.0,
-       width = 4.5)
+       height = 3.0)
 ```
 
 Make barplot from averages of these numbers
@@ -480,6 +478,20 @@ ggsave(meanRAbarNonCRS, filename = "16S_output/figures/meanRAbarplotNonCRS.pdf",
        width = 0.8)
 ```
 
+### Plot Grid
+
+```{r fig.height=3, fig.width=21}
+heatmap_grid <- plot_grid(heatmap.CRS, meanRAbarCRS, heatmap.NonCRS, meanRAbarNonCRS, 
+                          nrow = 1, 
+                          align = "hv",
+                          rel_widths = c(3,1,3,1))
+heatmap_grid
+```
+
+
+
+
+
 ### Whole dataset: CRS/Non-CRS
 ```{r}
 heatmap.obj <- amp_heatmap(ampvis.obj,
@@ -502,10 +514,18 @@ heatmap.obj
 ```
 
 # Table of prevalence and abundance
-Get the prevalence, sequence abundance and mean relative abundance of each unique taxname 
-## List of anaerobic bacterial taxa
+Get the prevalence, sequence abundance and mean relative abundance of each unique taxname for the top 20 taxa
+## Names of top 20 taxa by relative abundance
 ```{r}
-Anaerobes <- c("Fusobacterium", "Prevotella", "Parvimonas", "Peptostreptococcus", "Cutibacterium", "Leptotrichia", "Anaerococcus","Peptoniphilus","Veillonella","Akkermansia","Finegoldia","Clostridium","Bacteroides","Porphyromonas","Actinomyces","Streptococcus","Selenomonas","Tannerella", "Dialister","Capnocytophaga", "Gemella","Eikenella", "Solobacterium", "Campylobacter","Atopobium", "Oribacterium","Treponema")
+top20genera.df <- amp_heatmap(ampvis.obj,
+                           textmap = TRUE,
+                          tax_aggregate = "Genus",
+                           tax_show = 20,
+                           plot_values = FALSE,
+                           normalise = TRUE
+                           ) 
+top20generaNames <- rownames(top20genera.df)
+top20generaNames
 ```
 
 ## Agglomerate CRS and Non-CRS datasets by the "TaxName" level.
@@ -561,7 +581,7 @@ prevdf.taxname.CRS = data.frame(Prevalence = prevdf.taxname.CRS,
   rownames_to_column("ASV") %>%
   left_join(CRS.taxname.prop.melt, by = "TaxName") %>%
   column_to_rownames("ASV") %>%
-  select(Prevalence, Abundance, PercentAbundance, avgRelAbun, TaxName, everything(), -DB) %>%
+  select(Prevalence, Abundance, PercentAbundance, avgRelAbun, TaxName, everything(), DB) %>%
   mutate(DIAG_CRS = "CRS")
 dim(prevdf.taxname.CRS)
 ```
@@ -580,34 +600,109 @@ prevdf.taxname.nonCRS = data.frame(Prevalence = prevdf.taxname.nonCRS,
   rownames_to_column("ASV") %>%
   left_join(nonCRS.taxname.prop.melt, by = "TaxName") %>%
   column_to_rownames("ASV") %>%
-  select(Prevalence, Abundance, PercentAbundance, avgRelAbun, TaxName, everything(), -DB) %>%
+  select(Prevalence, Abundance, PercentAbundance, avgRelAbun, TaxName, everything()) %>%
   mutate(DIAG_CRS = "NonCRS")
 ```
 
-## Filter to include just Anaerobes
+## Filter to include just the top 20 taxa
 ```{r}
-prevdf.taxname.CRS.anaerobes <- filter(prevdf.taxname.CRS, Genus %in% Anaerobes)
+prevdf.taxname.CRS.top20genera <- filter(prevdf.taxname.CRS, Genus %in% top20generaNames)
 ```
 ```{r}
-prevdf.taxname.nonCRS.anaerobes <- filter(prevdf.taxname.nonCRS, Genus %in% Anaerobes)
+prevdf.taxname.nonCRS.top20genera <- filter(prevdf.taxname.nonCRS, Genus %in% top20generaNames)
 ```
 
 ## Bind the two tables together
 ```{r}
-prevdf.taxname.anaerobes <- bind_rows(prevdf.taxname.CRS.anaerobes, prevdf.taxname.nonCRS.anaerobes) %>%
+prevdf.taxname.top20genera <- bind_rows(prevdf.taxname.CRS.top20genera, prevdf.taxname.nonCRS.top20genera) %>%
   pivot_wider(id_cols = TaxName:Genus_Species2, names_from = DIAG_CRS, values_from = c("Prevalence","Abundance","PercentAbundance", "avgRelAbun")) %>%
   select(Kingdom, Phylum, Class, Order, Family, Genus, Species, TaxName, 
          Prevalence_CRS, Prevalence_NonCRS, Abundance_CRS, Abundance_NonCRS, 
          PercentAbundance_CRS, PercentAbundance_NonCRS, avgRelAbun_CRS, avgRelAbun_NonCRS) %>%
   arrange(Genus, TaxName)
 ```
+Bind database info to table
+```{r}
+taxname.db <- data.frame(tax_table(data))
+taxname.db <- select(taxname.db, TaxName, DB) %>%
+  group_by(TaxName) %>%
+  dplyr::summarise(DB=paste(DB, collapse = "/")) %>%
+  ungroup() %>%
+  mutate(DB = ifelse(grepl("Both", DB), "Both",
+                     ifelse(grepl("NA", DB), "NA",
+                            ifelse(grepl("SILVA/SILVA",DB), "SILVA", 
+                                   ifelse(grepl("HOMD/SILVA",DB), "Both",DB)))))
+
+prevdf.taxname.top20genera.db <- left_join(prevdf.taxname.top20genera, taxname.db, by = "TaxName")
+```
+```{r}
+write_csv(prevdf.taxname.top20genera.db,
+          "16S_output/top20PrevAbun.csv")
+```
+
+
+```{r}
+library(gt)
+library(gtsummary)
+library(webshot)
+```
+
+```{r}
+tab <- prevdf.taxname.top20genera.db %>%
+  select(Genus, TaxName, Prevalence_CRS, Prevalence_NonCRS, avgRelAbun_CRS, avgRelAbun_NonCRS, DB) %>%
+  gt(rowname_col = "TaxName", groupname_col = "Genus") %>%
+  fmt_number(columns = vars(avgRelAbun_CRS, avgRelAbun_NonCRS), decimals = 2) %>%
+  fmt_missing(columns = everything()) %>%
+  summary_rows(groups = TRUE, 
+               columns = vars(Prevalence_CRS, Prevalence_NonCRS, avgRelAbun_CRS, avgRelAbun_NonCRS),
+               fns = list(Total = ~sum(., na.rm = TRUE)),
+               use_seps = FALSE) %>%
+  cols_align(align = "center", columns = vars(Prevalence_CRS, Prevalence_NonCRS, avgRelAbun_CRS, avgRelAbun_NonCRS, DB)) %>%
+  tab_stubhead(label = md("**Taxonomic Feature**")) %>%
+  tab_spanner(label = md("**Prevalence**"),
+              columns = vars(Prevalence_CRS, Prevalence_NonCRS)) %>%
+  tab_spanner(label = md("**Average % Abundance**"),
+              columns = vars(avgRelAbun_CRS, avgRelAbun_NonCRS)) %>%
+  cols_label(Prevalence_CRS = md("**CRS**"),
+             Prevalence_NonCRS = md("**Non-CRS**"),
+             avgRelAbun_CRS = md("**CRS**"),
+             avgRelAbun_NonCRS = md("**Non-CRS**"),
+             DB = md("**Database**")) %>%
+  tab_style(style = cell_text(size = px(9), color = "black", font = "arial"),
+    locations = cells_body(vars(Prevalence_CRS, Prevalence_NonCRS, avgRelAbun_CRS, avgRelAbun_NonCRS, DB))) %>%
+  tab_style(style = cell_text(size = px(9), color = "black", font = "arial"),
+    locations = cells_summary(groups = TRUE, rows = TRUE, columns = TRUE)) %>%
+  tab_style(style = cell_text(size = px(9), color = "black", font = "arial", style = "italic", weight = "bold"),
+    locations = cells_row_groups(groups = TRUE)) %>%
+  tab_style(style = cell_text(size = px(9), color = "black", font = "arial", style = "italic"),
+    locations = cells_stub(rows = TRUE)) %>%
+  tab_options(
+    table.font.size = 9,
+    table.font.names = "arial",
+    data_row.padding = px(2),
+    summary_row.padding = px(2),
+    row_group.padding = px(2),
+    table.border.top.style = "none",
+    table.border.bottom.style = "none",
+    table_body.border.top.style = "none",
+    table_body.border.bottom.style = "none",
+  )
+
+tab
+#gtsave(tab, filename = "16S_output/Top20prevAbundTable.pdf")
+```
 
 ## Export as a .CSV
 ```{r}
-write_csv(prevdf.taxname.anaerobes, "16S_output/anaerobePrevAbun.csv")
+write_csv(prevdf.taxname.top20genera, "16S_output/top20PrevAbun.csv")
 ```
 
 # Relative Abundance Boxplots
+
+## List of bacteria of interest
+```{r}
+Anaerobes <- c("Fusobacterium", "Prevotella", "Parvimonas", "Peptostreptococcus", "Cutibacterium", "Leptotrichia", "Anaerococcus","Peptoniphilus","Veillonella","Akkermansia","Finegoldia","Clostridium","Bacteroides","Porphyromonas","Actinomyces","Streptococcus","Selenomonas","Tannerella", "Dialister","Capnocytophaga", "Gemella","Eikenella", "Solobacterium", "Campylobacter","Atopobium", "Oribacterium","Treponema")
+```
 
 ## Agglomerate data to the Genus level.
 ```{r}
@@ -669,8 +764,6 @@ TopTaxPropPlotCRS <- plot_abundance(dataProp, Facet = "Genus", Color = "DIAG_CRS
 TopTaxPropPlotCRS
 ```
 
-
-
 # Statistical analysis of Bacterial taxa with clinical parameters
 ```{r}
 clinicalData <- data.frame(sample_data(data))
@@ -709,35 +802,36 @@ Actino <- data %>%
 Actinobacteria abundance in CRS and non-CRS samples:
 ```{r}
 ActinoDIAGboxplot <- ggboxplot(Actino, x = "DIAG_CRS", y = "Abundance",
-          #color = as.character("SINUS_FACTORS_PRIORFESS"),
           fill = "#FF0037",
-          #add = "jitter",
-          #palette = "grey",  
-         # title = "Actinobacteria abundance and \nCRS diagnosis"
           ) + 
-  stat_compare_means(method = "wilcox.test", size = 5) + 
+  stat_compare_means(method = "wilcox.test", size = 5, label = "p.format") + 
   scale_y_log10() +
-  scale_x_discrete(labels = c("1","0")) +
-  labs(x = "", y = "Relative Abundance (%)") +
-  theme(legend.position  = "")
+  labs(x = "", y = "") +
+  theme_pubr(base_size = 10) +
+  theme(legend.position  = "",
+        plot.margin = margin(0,1,0,0, "cm"))
 ActinoDIAGboxplot
 ```
 
 Actinobacteria Abundance and incidence of prior FESS surgery in CRS subjects
 ```{r}
 ActinoFESS <- filter(Actino, !is.na(SINUS_FACTORS_PRIORFESS),
-                     DIAG_CRS == "CRS")
+                     DIAG_CRS == "CRS") %>%
+  mutate(SINUS_FACTORS_PRIORFESS = ifelse(SINUS_FACTORS_PRIORFESS == 1, "Yes",
+                                          ifelse(SINUS_FACTORS_PRIORFESS == 0, "No", NA)))
 # New levels for axis order
-ActinoFESS$SINUS_FACTORS_PRIORFESS = factor(ActinoFESS$SINUS_FACTORS_PRIORFESS, levels=c(1,0))
+ActinoFESS$SINUS_FACTORS_PRIORFESS = factor(ActinoFESS$SINUS_FACTORS_PRIORFESS, levels=c("Yes","No"))
 
 ActinoFESSboxplot <- ggboxplot(ActinoFESS, x = as.character("SINUS_FACTORS_PRIORFESS"), y = "Abundance",
           fill = "#FF0037",
           palette = "npg",  
           ) + 
-  stat_compare_means(method = "wilcox.test", size = 5) + 
+  stat_compare_means(method = "wilcox.test", size = 5, label = "p.format") + 
   scale_y_log10() +
-  labs(x = "", y = "Relative Abundance (%)") +
-  theme(legend.position  = "")
+  labs(x = "", y = "") +
+  theme_pubr(base_size = 10) +
+  theme(legend.position  = "",
+        plot.margin = margin(0,1,0,0, "cm"))
 ActinoFESSboxplot
 ```
 ```{r}
@@ -751,7 +845,7 @@ ggsave(ActinoGrid,
        device = "pdf",
        bg = "transparent",
       height = 2,
-       width = 4,
+       width = 5,
        useDingbats = FALSE)
 ```
 Actinobacteria abundance is significantly higher in CRS subjects with no history of previous FESS.  
