@@ -4,6 +4,7 @@ title: "R Notebook"
 
 ```{r}
 library(tidyverse)
+library(naniar)
 library(ggpubr)
 ```
 Aesthetics
@@ -19,39 +20,44 @@ data <- read_csv(file = "../data/enrichment/HPLC/CFS_HPLC.csv") %>%
   filter(!metabolite == "Succinate") %>%
   mutate(replicate = c(1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3)) %>%
   pivot_longer(cols=A:H, names_to = "cfs", values_to = "mM") %>%
+  #replace_with_na_all(condition = ~.x == 0) %>%
   group_by(metabolite, cfs) %>%
-  summarize(mean = mean(mM), sd = sd(mM)) %>%
+  summarize(mean = mean(mM), na.rm = T, 
+            sd = sd(mM), na.rm = T) %>%
   mutate(minsd = mean-sd, maxsd = mean+sd) %>%
   mutate(minsd = ifelse(minsd > 0, minsd, 0)) %>%
   ungroup()
 ```
-Boxplots
+
 ```{r}
 # New levels for facet order
 data$metabolite = factor(data$metabolite, levels=c('Acetate','Propionate','Butyrate','Lactate','Formate','Pyruvate'))
 ```
 
+
+Barplots
 ```{r fig.height=2, fig.width=10}
 p <- ggplot(data) +
   geom_bar( aes(x=cfs, y=mean, fill=cfs), stat="identity", color = "black") +
   geom_errorbar( aes(x=cfs, ymin=minsd, ymax=maxsd), width = 0.2, color = "black", size = .4) +
   facet_wrap("metabolite", nrow = 1, scales = "free") +
   scale_fill_manual(values = cbPal) +
-  theme_pubr(base_size = 9) +
+  theme_pubr(base_size = 9, base_family = "Arial") +
+  labs(x = "", y = "Concenration (mM)") +
   theme(legend.position = "",
-        axis.title = element_blank(),
+        axis.title.y = element_text(color = "black", size = 20),
         axis.ticks = element_line(color = "black"),
         strip.background = element_rect(color = "white", fill = "white"),
-        strip.text = element_text(face = "bold", size = 10),
-        axis.text = element_text(face = "plain", size = 10)
+        strip.text = element_text(color = "black", face = "bold", size = 20),
+        axis.text = element_text(color = "black", face = "plain", size = 20)
         )
 p
 ```
 
 ```{r}
-ggsave(p, filename = "enrichment_output/hplc_metabolite_concentrations.pdf",
-       height = 2,
-       width = 9,
-       device = "pdf")
+#ggsave(p, filename = "enrichment_output/hplc_metabolite_concentrations.pdf",
+#       height = 2,
+#       width = 9,
+#       device = "pdf")
 ```
 

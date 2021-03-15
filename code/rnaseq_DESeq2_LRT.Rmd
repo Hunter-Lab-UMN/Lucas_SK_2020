@@ -47,7 +47,7 @@ ddsSE_samples <- DESeqDataSetFromMatrix(
   design= ~ Group)
 class(ddsSE_samples)
 ```
-Run the DESeq 
+Run DESeq 
 ```{r}
 ddsLRT_samples <- DESeq(ddsSE_samples, test = "LRT", reduced = ~1)
 resLRT_samples <- results(ddsLRT_samples)
@@ -61,26 +61,26 @@ https://hbctraining.github.io/DGE_workshop/lessons/08_DGE_LRT.html
 ```{r}
 padj.cutoff <- 1e-10
 # Subset the LRT results to return genes with padj < 0.05
-sig_res_LRT_samples <- resLRT_samples %>%
-               data.frame() %>%
-               rownames_to_column(var="gene") %>% 
-               as_tibble() %>% 
+sig_res_LRT_samples <- resLRT_samples_df %>% # changed to resLRT_samples_df from resLRT_samples
+               #data.frame() %>%
+               #rownames_to_column(var="gene") %>% 
+               #as_tibble() %>% 
                filter(padj < padj.cutoff) %>%
-  rename(GeneID=gene) %>%
+  dplyr::rename(GeneID = gene) %>%
   left_join(aureowikiGenesAbbr, by="GeneID")
 ```
 export to csv
 ```{r}
-write_csv(sig_res_LRT_samples, path="rnaseq_output/sig_res_LRT_samples.csv")
+#write_csv(sig_res_LRT_samples, path="rnaseq_output/sig_res_LRT_samples.csv")
 ```
 
-# Filter significance table to only include log2fc 
+# Filter significance table to only include log2fc greater than |1|
 ```{r}
 sig_res_LRT_samples_lfc1 <- filter(sig_res_LRT_samples, !between(log2FoldChange, -1, 1))
 ```
 export to csv
 ```{r}
-write_csv(sig_res_LRT_samples_lfc1, path = "rnaseq_output/sig_res_LRT_samples_lfc1.csv")
+#write_csv(sig_res_LRT_samples_lfc1, path = "rnaseq_output/sig_res_LRT_samples_lfc1.csv")
 ```
 
 ## rLog transform
@@ -89,7 +89,7 @@ The function rlog returns a SummarizedExperiment object which contains the rlog-
 rld_samples <- rlog(ddsLRT_samples)
 head(assay(rld_samples))
 ```
-Now filter, the rlog transformed dataset to only include those genes in the sig_res_LRT list.
+Now filter, the rlog transformed dataset to only include those genes in the sig_res_LRT_samples_lfc1 list.
 ```{r}
 # pull geneIDs from the filtered results table
 LRT_samples_geneID <- sig_res_LRT_samples_lfc1 %>% pull(GeneID)
@@ -102,15 +102,15 @@ matLRTsamplesGeneID <- assay(rld_samples)[ LRT_samples_geneID, ]
 topVarGenesSamples <- head(order(-rowVars(matLRTsamplesGeneID)),100)
 matLRTsamplesGeneIDvar <- matLRTsamplesGeneID[ topVarGenesSamples, ]
 ```
-The heatmap becomes more interesting if we do not look at absolute expression strength but rather at the amount by which each gene deviates in a specific sample from the gene's average across all samples. Hence, we center each genes' values across samples, and plot a heatmap. We provide the column side colors to help identify the treated samples (in blue) from the untreated samples (in grey).
+The heatmap becomes more interesting if we do not look at absolute expression strength but rather at the amount by which each gene deviates in a specific sample from the gene's average across all samples. Hence, we center each genes' values across samples, and plot a heatmap.
 ```{r}
 matLRTsamplesGeneIDvarMinusMean <- matLRTsamplesGeneIDvar - rowMeans(matLRTsamplesGeneIDvar)
 ```
 
 ```{r}
 # make a table of gene labels to plot with
-geneLabelsSamplesLRTvarMinusMean <- as.data.frame(rownames(matLRTsamplesGeneIDvarMinusMean)) %>%
-  rename(GeneID = "rownames(matLRTsamplesGeneIDvarMinusMean)") %>%
+geneLabelsSamplesLRTvarMinusMean <- data.frame(GeneID = rownames(matLRTsamplesGeneIDvarMinusMean)) %>%
+  #rename(GeneID = rownames(matLRTsamplesGeneIDvarMinusMean)) %>%
   left_join(aureowikiGenesAbbr, by="GeneID") %>%
   mutate(pan_gene_symbol = as.character(pan_gene_symbol)) %>%
   replace_na(list(pan_gene_symbol = "-")) %>%
@@ -187,15 +187,14 @@ LRT_samples_pubID <- sig_res_LRT_samples_lfc1 %>%
 # filter the rld transformed count matrix by those geneIDs
 matLRTsamplesPubID <- assay(rld_samples)[ LRT_samples_pubID, ]
 ```
-The heatmap becomes more interesting if we do not look at absolute expression strength but rather at the amount by which each gene deviates in a specific sample from the gene's average across all samples. Hence, we center each genes' values across samples, and plot a heatmap. We provide the column side colors to help identify the treated samples (in blue) from the untreated samples (in grey).
+The heatmap becomes more interesting if we do not look at absolute expression strength but rather at the amount by which each gene deviates in a specific sample from the gene's average across all samples. Hence, we center each genes' values across samples, and plot a heatmap. 
 ```{r}
 matLRTsamplesPubIDMinusMean <- matLRTsamplesPubID - rowMeans(matLRTsamplesPubID)
 ```
 Set up labels for heatmap
 ```{r}
 # make a table of gene labels to plot with
-geneLabelsSamplesLRTMinusMean <- as.data.frame(rownames(matLRTsamplesPubIDMinusMean)) %>%
-  rename(GeneID = "rownames(matLRTsamplesPubIDMinusMean)") %>%
+geneLabelsSamplesLRTMinusMean <- data.frame(GeneID = rownames(matLRTsamplesPubIDMinusMean)) %>%
   left_join(aureowikiGenesAbbr, by="GeneID") %>%
   mutate(pan_gene_symbol = as.character(pan_gene_symbol)) %>%
   replace_na(list(pan_gene_symbol = "-")) %>%
@@ -214,7 +213,7 @@ heatmapLRTPubSamples <- pheatmap(matLRTsamplesPubIDMinusMean,
                     color = colorRampPalette(rev(brewer.pal(n = 9, name ="RdYlBu")))(100),
                     cellheight = 8,
                     cellwidth = 8,
-                    legend = FALSE,
+                    legend = TRUE,
                     annotation_legend=FALSE,
                     treeheight_row = 10,
                     treeheight_col = 10,
@@ -225,11 +224,14 @@ heatmapLRTPubSamples <- pheatmap(matLRTsamplesPubIDMinusMean,
 heatmapLRTPubSamples
 ```
 
+
 ```{r}
 ggsave(heatmapLRTPubSamples, filename = "rnaseq_output/CFS_LRT_heatmap_pubGenes.pdf",
        device = "pdf",
-       height = 4.5,
-       width = 2)
+       #height = 4.5,
+       #width = 2
+       height = 6,
+       width = 4)
 ```
 
 
@@ -285,7 +287,7 @@ p <- ggtern(data=ternarydf, aes(x = avgRlog234,
 p
 ```
 ```{r}
-ggsave(p, filename = "../figures/DESeq2/LRTlfc1_ternary_plot.pdf", device = "pdf")
+#ggsave(p, filename = "../figures/DESeq2/LRTlfc1_ternary_plot.pdf", device = "pdf")
 ```
 
 

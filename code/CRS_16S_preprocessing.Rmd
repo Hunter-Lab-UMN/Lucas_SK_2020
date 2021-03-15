@@ -233,7 +233,7 @@ CRS.pv.2
 ```
 Save this object as the minimally filtered dataset. Different applications may require different levels of filtering taxa after this step. Up to this point, the removal of taxa has been conservative.
 ```{r}
-saveRDS(CRS.pv.2, "16S_output/phyloseq_supervised_filt.rds")
+#saveRDS(CRS.pv.2, "16S_output/phyloseq_supervised_filt.rds")
 ```
 
 
@@ -402,7 +402,7 @@ ggplot(prevdf.pv.unsuper, aes(TotalAbundance, Prevalence / nsamples(CRS.unsuper)
   facet_wrap(~Phylum) + theme(legend.position="none")
 ```
 ```{r}
-saveRDS(CRS.unsuper, "16S_output/phyloseq_unsupervised_filt.rds")
+#saveRDS(CRS.unsuper, "16S_output/phyloseq_unsupervised_filt.rds")
 ```
 
 Make a rarified dataset to test with different analyses
@@ -417,5 +417,5 @@ CRS.unsuper.rare <- rarefy_even_depth(CRS.unsuper,
 CRS.unsuper.rare
 ```
 ```{r}
-saveRDS(CRS.unsuper.rare, "16S_output/phyloseq_unsupervised_filtered_rare.rds")
+#saveRDS(CRS.unsuper.rare, "16S_output/phyloseq_unsupervised_filtered_rare.rds")
 ```

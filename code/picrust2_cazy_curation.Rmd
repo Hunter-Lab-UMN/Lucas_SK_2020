@@ -1,7 +1,10 @@
 ---
 title: "CAZy Data Curation"
-output: html_notebook
 ---
+# Setup
+```{r}
+library(tidyverse)
+```
 
 # CAZy data curation
 
@@ -36,7 +39,7 @@ CAZy <- left_join(CAZyProteins, CAZyClass, by = "class")
 length(unique(CAZy$genbank))
 length(unique(CAZy$ECnum))
 length(unique(CAZy$class))
-saveRDS(CAZy, "../data/picrust2/CAZy.rds")
+#saveRDS(CAZy, "../data/picrust2/CAZy.rds")
 ```
 This resulting dataframe "CAZy" contains all genbank accessions, their corresponding EC numbers, and the matched CAZy Classes. There is redundancy in the database in every column. A total of 27787 unique genbank accessions, 593 EC numbers, and 412 unique CAZy assignments.
 
@@ -49,28 +52,28 @@ I want to reduce this dataset to just accessions that belong to Bacteria.
 ```{r}
 CAZyAccessionsAA <- CAZy %>%
   filter(grepl('^AA', class)) %>%
-  select(genbank) %>%
-  write_tsv("../data/picrust2/GenBankAcessions_AA.txt")
+  select(genbank) #%>%
+ #write_tsv("../data/picrust2/GenBankAcessions_AA.txt")
 CAZyAccessionsGH <- CAZy %>%
   filter(grepl('^GH', class)) %>%
-  select(genbank) %>%
-  write_tsv("../data/picrust2/GenBankAcessions_GH.txt")
+  select(genbank) #%>%
+  #write_tsv("../data/picrust2/GenBankAcessions_GH.txt")
 CAZyAccessionsGT <- CAZy %>%
   filter(grepl('^GT', class)) %>%
-  select(genbank) %>%
-  write_tsv("../data/picrust2/GenBankAcessions_GT.txt")
+  select(genbank) #%>%
+  #write_tsv("../data/picrust2/GenBankAcessions_GT.txt")
 CAZyAccessionsPL <- CAZy %>%
   filter(grepl('^PL', class)) %>%
-  select(genbank) %>%
-  write_tsv("../data/picrust2/GenBankAcessions_PL.txt")
+  select(genbank) #%>%
+  #write_tsv("../data/picrust2/GenBankAcessions_PL.txt")
 CAZyAccessionsCE <- CAZy %>%
   filter(grepl('^CE', class)) %>%
-  select(genbank) %>%
-  write_tsv("../data/picrust2/GenBankAcessions_CE.txt")
+  select(genbank) #%>%
+  #write_tsv("../data/picrust2/GenBankAcessions_CE.txt")
 CAZyAccessionsCBM <- CAZy %>%
   filter(grepl('^CBM', class)) %>%
-  select(genbank) %>%
-  write_tsv("../data/picrust2/GenBankAcessions_CBM.txt")
+  select(genbank) #%>%
+  #write_tsv("../data/picrust2/GenBankAcessions_CBM.txt")
 ```
 The resulting files all have row numbers that add up to the total row numbers of the CAZy dataset, meaning we have captured all the data into these 6 categories. The total row number of each dataset adds up to the rownumber in the original dataframe
 
@@ -124,28 +127,28 @@ The CAZyAccessionsGH has 16164 entries. Entrez just times out with this many sea
 ```{r}
 # Accessions 1-2000
 CAZyAccessionsGH_2000 <- slice(CAZyAccessionsGH, 1:2000)
-write_csv(CAZyAccessionsGH_2000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_2000.txt")
+#write_csv(CAZyAccessionsGH_2000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_2000.txt")
 # Accessions 2001-4000
 CAZyAccessionsGH_4000 <- slice(CAZyAccessionsGH, 2001:4000)
-write_csv(CAZyAccessionsGH_4000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_4000.txt")
+#write_csv(CAZyAccessionsGH_4000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_4000.txt")
 # Accessions 4001-6000
 CAZyAccessionsGH_6000 <- slice(CAZyAccessionsGH, 4001:6000)
-write_csv(CAZyAccessionsGH_6000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_6000.txt")
+#write_csv(CAZyAccessionsGH_6000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_6000.txt")
 # Accessions 6001-8000
 CAZyAccessionsGH_8000 <- slice(CAZyAccessionsGH, 6001:8000)
-write_csv(CAZyAccessionsGH_8000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_8000.txt")
+#write_csv(CAZyAccessionsGH_8000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_8000.txt")
 # Accessions 8001-10000
 CAZyAccessionsGH_10000 <- slice(CAZyAccessionsGH, 8001:10000)
-write_csv(CAZyAccessionsGH_10000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_10000.txt")
+#write_csv(CAZyAccessionsGH_10000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_10000.txt")
 # Accessions 10001-12000
 CAZyAccessionsGH_12000 <- slice(CAZyAccessionsGH, 10001:12000)
-write_csv(CAZyAccessionsGH_12000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_12000.txt")
+#write_csv(CAZyAccessionsGH_12000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_12000.txt")
 # Accessions 12001-14000
 CAZyAccessionsGH_14000 <- slice(CAZyAccessionsGH, 12001:14000)
-write_csv(CAZyAccessionsGH_14000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_14000.txt")
+#write_csv(CAZyAccessionsGH_14000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_14000.txt")
 # Accessions 14001-16164
 CAZyAccessionsGH_16164 <- slice(CAZyAccessionsGH, 14001:16164)
-write_csv(CAZyAccessionsGH_16164, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_16164.txt")
+#write_csv(CAZyAccessionsGH_16164, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GH_16164.txt")
 ```
 Import bacteria specific entrez lists
 ```{r}
@@ -188,19 +191,19 @@ The CAZyAccessionsGH has 16164 entries. Entrez just times out with this many sea
 ```{r}
 # Accessions 1-2000
 CAZyAccessionsGT_2000 <- slice(CAZyAccessionsGT, 1:2000)
-write_csv(CAZyAccessionsGT_2000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_2000.txt")
+#write_csv(CAZyAccessionsGT_2000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_2000.txt")
 # Accessions 2001-4000
 CAZyAccessionsGT_4000 <- slice(CAZyAccessionsGT, 2001:4000)
-write_csv(CAZyAccessionsGT_4000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_4000.txt")
+#write_csv(CAZyAccessionsGT_4000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_4000.txt")
 # Accessions 4001-6000
 CAZyAccessionsGT_6000 <- slice(CAZyAccessionsGT, 4001:6000)
-write_csv(CAZyAccessionsGT_6000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_6000.txt")
+#write_csv(CAZyAccessionsGT_6000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_6000.txt")
 # Accessions 6001-8000
 CAZyAccessionsGT_8000 <- slice(CAZyAccessionsGT, 6001:8000)
-write_csv(CAZyAccessionsGT_8000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_8000.txt")
+#write_csv(CAZyAccessionsGT_8000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_8000.txt")
 # Accessions 8001-10000
 CAZyAccessionsGT_10000 <- slice(CAZyAccessionsGT, 8001:10072)
-write_csv(CAZyAccessionsGT_10000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_10000.txt")
+#write_csv(CAZyAccessionsGT_10000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_GT_10000.txt")
 ```
 import bacteria specific entrez lists
 ```{r}
@@ -248,10 +251,10 @@ No duplicates, which makes sense because Entrez gets rid of them. We reduced thi
 ```{r}
 # Accessions 1-2000
 CAZyAccessionsCBM_2000 <- slice(CAZyAccessionsCBM, 1:2000)
-write_csv(CAZyAccessionsCBM_2000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_CBM_2000.txt")
+#write_csv(CAZyAccessionsCBM_2000, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_CBM_2000.txt")
 # Accessions 2001-4000
 CAZyAccessionsGT_4078 <- slice(CAZyAccessionsCBM, 2001:4078)
-write_csv(CAZyAccessionsGT_4078, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_CBM_4078.txt")
+#write_csv(CAZyAccessionsGT_4078, "../data/picrust2/EntrezFiles/EntrezInput/GenBankAcessions_CBM_4078.txt")
 ```
 import bacteria specific entrez lists
 ```{r}
@@ -324,6 +327,6 @@ head(unique(dupes$genbank))
 
 Save CAZyBacteria
 ```{r}
-saveRDS(CAZyBacteria, "picrust2_output/CAZyBacteria.rds")
+#saveRDS(CAZyBacteria, "picrust2_output/CAZyBacteria.rds")
 ```
 

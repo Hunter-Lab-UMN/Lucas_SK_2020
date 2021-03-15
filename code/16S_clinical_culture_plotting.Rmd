@@ -1,0 +1,232 @@
+---
+title: "CRS Clinical Data"
+---
+```{r}
+library(tidyverse)
+```
+Get heatmap sample order names
+```{r}
+heatmap.names.ordered <- read_csv("../data/16S/CRS_heatmap_names_ordered.csv") %>%
+  select(subject_id) %>%
+  separate(subject_id, into = c("A",NA), sep = "S") %>%
+  separate(A, into = c("subject_id",NA), sep = "-") %>%
+  mutate(subject_id = as.numeric(subject_id) - 3000) %>%
+  mutate(subject_id = as.character(subject_id))
+```
+
+```{r}
+heatmap.num.ordered <- unique(heatmap.names.ordered$subject_id)
+heatmap.num.ordered
+```
+```{r}
+culture.data <- read_csv("../data/16S/3.1.2021 Sarah Lucas - Culture Data.csv") %>%
+  filter(!is.na(specimen_type_description)) %>%
+  select(subject_id, ddiff_cult_sample1, redcap_repeat_instance, purulence_of_sample, 
+         pseudomonas_aeruginosa_muc, 
+         "pseudomonas_aeruginosa"=culture, 
+         staph_aureus, 
+         coag_negative_staph, 
+         strep_pneumo, 
+         other_culture_1,
+         other_culture_2,
+         other_culture_3,
+         other_culture_4) %>%
+  mutate(subject_id = as.character(subject_id),
+         C_pseudodip = if_else(grepl("Corynebacterium pseudodip", other_culture_1, ignore.case = T) | 
+                                 grepl("Corynebacterium pseudodip", other_culture_2, ignore.case = T) |
+                                 grepl("Corynebacterium pseudodip", other_culture_3, ignore.case = T) |
+                                 grepl("Corynebacterium pseudodip", other_culture_4, ignore.case = T), 1, 2),
+         H_influenzae = if_else(grepl("Haemophilus influenzae", other_culture_1, ignore.case = T) | 
+                                  grepl("Haemophilus influenzae", other_culture_2, ignore.case = T) |
+                                  grepl("Haemophilus influenzae", other_culture_3, ignore.case = T) |
+                                  grepl("Haemophilus influenzae", other_culture_4, ignore.case = T), 1, 2),
+         K_pneumoniae = if_else(grepl("Klebsiella pneumoniae", other_culture_1, ignore.case = T) | 
+                                  grepl("Klebsiella pneumoniae", other_culture_2, ignore.case = T) |
+                                  grepl("Klebsiella pneumoniae", other_culture_3, ignore.case = T) |
+                                  grepl("Klebsiella pneumoniae", other_culture_4, ignore.case = T), 1, 2),
+         S_malto = if_else(grepl("Stenotrophomonas maltophilia", other_culture_1, ignore.case = T) | 
+                             grepl("Stenotrophomonas maltophilia", other_culture_2, ignore.case = T) |
+                             grepl("Stenotrophomonas maltophilia", other_culture_3, ignore.case = T) |
+                             grepl("Stenotrophomonas maltophilia", other_culture_4, ignore.case = T), 1, 2),
+         S_marcescens = if_else(grepl("Serratia marcescens", other_culture_1, ignore.case = T) | 
+                             grepl("Serratia marcescens", other_culture_2, ignore.case = T) |
+                             grepl("Serratia marcescens", other_culture_3, ignore.case = T) |
+                             grepl("Serratia marcescens", other_culture_4, ignore.case = T), 1, 2),
+         M_catarrhalis = if_else(grepl("Moraxella", other_culture_1, ignore.case = T) | 
+                             grepl("Moraxella", other_culture_2, ignore.case = T) |
+                             grepl("Moraxella", other_culture_3, ignore.case = T) |
+                             grepl("Moraxella", other_culture_4, ignore.case = T), 1, 2),
+         B_hemo_strep = if_else(grepl("Strep", other_culture_1, ignore.case = T) | 
+                             grepl("Strep", other_culture_2, ignore.case = T) |
+                             grepl("Strep", other_culture_3, ignore.case = T) |
+                             grepl("Strep", other_culture_4, ignore.case = T), 1, 2))
+culture.data
+```
+```{r}
+culture.data.tally <- culture.data %>% group_by(subject_id) %>%
+  tally()
+culture.data.tally
+```
+Since some samples have multiple entries == multiple culture results within the 90-day window, we want to combine those data into a single entry. Culture data tally tells us that in our data we have 47 unique subject_ids with culture data. 
+```{r}
+culture.data.summarized <- culture.data %>%
+  left_join(culture.data.tally) %>%
+  group_by(subject_id, n) %>%
+  dplyr::summarise(staph_add = sum(staph_aureus),
+                   cns_staph_add = sum(coag_negative_staph),
+                   pa_add = sum(pseudomonas_aeruginosa),
+                   pa_muc_add = sum(pseudomonas_aeruginosa_muc),
+                   strep_pneumo_add = sum(strep_pneumo),
+                   C_pseudodip_add = sum(C_pseudodip),
+                   H_influenzae_add = sum(H_influenzae),
+                   K_pneumoniae_add = sum(K_pneumoniae),
+                   S_malto_add = sum(S_malto),
+                   S_marcescens_add = sum(S_marcescens),
+                   beta_hemolytic_strep_add = sum(B_hemo_strep),
+                   M_catarrhalis_add = sum(M_catarrhalis)) %>%
+  ungroup() %>%
+  mutate(sa_summ = ifelse(n == 1 & staph_add == 1, "yes",
+                          ifelse(n == 1 & staph_add == 2, "no",
+                                 ifelse(n == 2 & staph_add %in% c(2,3), "yes",
+                                        ifelse(n == 2 & staph_add == 4, "no",
+                                               ifelse(n == 3 & staph_add %in% c(3,4,5), "yes", "no"))))),
+         cns_summ = ifelse(n == 1 & cns_staph_add == 1, "yes",
+                          ifelse(n == 1 & cns_staph_add == 2, "no",
+                                 ifelse(n == 2 & cns_staph_add %in% c(2,3), "yes",
+                                        ifelse(n == 2 & cns_staph_add == 4, "no",
+                                               ifelse(n == 3 & cns_staph_add %in% c(3,4,5), "yes", "no"))))),
+         pa_summ = ifelse(n == 1 & pa_add == 1, "yes",
+                          ifelse(n == 1 & pa_add == 2, "no",
+                                 ifelse(n == 2 & pa_add %in% c(2,3), "yes",
+                                        ifelse(n == 2 & pa_add == 4, "no",
+                                               ifelse(n == 3 & pa_add %in% c(3,4,5), "yes", "no"))))),
+         pa_muc_summ = ifelse(n == 1 & pa_muc_add == 1, "yes",
+                          ifelse(n == 1 & pa_muc_add == 2, "no",
+                                 ifelse(n == 2 & pa_muc_add %in% c(2,3), "yes",
+                                        ifelse(n == 2 & pa_muc_add == 4, "no",
+                                               ifelse(n == 3 & pa_muc_add %in% c(3,4,5), "yes", "no"))))),
+         strep_pneumo_summ = ifelse(n == 1 & strep_pneumo_add == 1, "yes",
+                          ifelse(n == 1 & strep_pneumo_add == 2, "no",
+                                 ifelse(n == 2 & strep_pneumo_add %in% c(2,3), "yes",
+                                        ifelse(n == 2 & strep_pneumo_add == 4, "no",
+                                               ifelse(n == 3 & strep_pneumo_add %in% c(3,4,5), "yes", "no"))))),
+         C_pseudodip_summ = ifelse(n == 1 & C_pseudodip_add == 1, "yes",
+                          ifelse(n == 1 & C_pseudodip_add == 2, "no",
+                                 ifelse(n == 2 & C_pseudodip_add %in% c(2,3), "yes",
+                                        ifelse(n == 2 & C_pseudodip_add == 4, "no",
+                                               ifelse(n == 3 & C_pseudodip_add %in% c(3,4,5), "yes", "no"))))),
+         H_influenzae_summ = ifelse(n == 1 & H_influenzae_add == 1, "yes",
+                          ifelse(n == 1 & H_influenzae_add == 2, "no",
+                                 ifelse(n == 2 & H_influenzae_add %in% c(2,3), "yes",
+                                        ifelse(n == 2 & H_influenzae_add == 4, "no",
+                                               ifelse(n == 3 & H_influenzae_add %in% c(3,4,5), "yes", "no"))))),
+         K_pneumoniae_summ = ifelse(n == 1 & K_pneumoniae_add == 1, "yes",
+                          ifelse(n == 1 & K_pneumoniae_add == 2, "no",
+                                 ifelse(n == 2 & K_pneumoniae_add %in% c(2,3), "yes",
+                                        ifelse(n == 2 & K_pneumoniae_add == 4, "no",
+                                               ifelse(n == 3 & K_pneumoniae_add %in% c(3,4,5), "yes", "no"))))),
+         S_malto_summ = ifelse(n == 1 & S_malto_add == 1, "yes",
+                          ifelse(n == 1 & S_malto_add == 2, "no",
+                                 ifelse(n == 2 & S_malto_add %in% c(2,3), "yes",
+                                        ifelse(n == 2 & S_malto_add == 4, "no",
+                                               ifelse(n == 3 & S_malto_add %in% c(3,4,5), "yes", "no"))))),
+         S_marcescens_summ = ifelse(n == 1 & S_marcescens_add == 1, "yes",
+                          ifelse(n == 1 & S_marcescens_add == 2, "no",
+                                 ifelse(n == 2 & S_marcescens_add %in% c(2,3), "yes",
+                                        ifelse(n == 2 & S_marcescens_add == 4, "no",
+                                               ifelse(n == 3 & S_marcescens_add %in% c(3,4,5), "yes", "no"))))),
+         beta_hemolytic_strep_summ = ifelse(n == 1 & beta_hemolytic_strep_add == 1, "yes",
+                          ifelse(n == 1 & beta_hemolytic_strep_add == 2, "no",
+                                 ifelse(n == 2 & beta_hemolytic_strep_add %in% c(2,3), "yes",
+                                        ifelse(n == 2 & beta_hemolytic_strep_add == 4, "no",
+                                               ifelse(n == 3 & beta_hemolytic_strep_add %in% c(3,4,5), "yes", "no"))))),
+         M_catarrhalis_summ = ifelse(n == 1 & M_catarrhalis_add == 1, "yes",
+                          ifelse(n == 1 & M_catarrhalis_add == 2, "no",
+                                 ifelse(n == 2 & M_catarrhalis_add %in% c(2,3), "yes",
+                                        ifelse(n == 2 & M_catarrhalis_add == 4, "no",
+                                               ifelse(n == 3 & M_catarrhalis_add %in% c(3,4,5), "yes", "no")))))) %>%
+    # Fix the two pseudomonas categories: 
+  mutate(pa_summ == ifelse(pa_summ == "yes", "yes",
+                           ifelse(pa_muc_summ == "yes", "yes", "no"))) %>%
+  select(subject_id, sa_summ, cns_summ, pa_summ,strep_pneumo_summ, 
+         C_pseudodip_summ, H_influenzae_summ, 
+         K_pneumoniae_summ, S_malto_summ, S_marcescens_summ,
+         beta_hemolytic_strep_summ, M_catarrhalis_summ) %>%
+  right_join(heatmap.names.ordered) # joining the data here will sort the subject ids and get rid of any samples not in the CRS group
+
+```
+
+```{r}
+culture.data.summarized.long <- culture.data.summarized %>%
+  #filter(!subject_id %in% nonCRSculturesNames) %>%
+  pivot_longer(!subject_id, names_to = "org", values_to = "pos_neg")
+length(unique(culture.data.summarized.long$subject_id))
+```
+
+```{r}
+culture.breaks <- c("strep_pneumo_summ",
+                    "beta_hemolytic_strep_summ",
+                    "pa_summ",
+                    "sa_summ", 
+                    "cns_summ", 
+                    "C_pseudodip_summ",
+                    "M_catarrhalis_summ", 
+                    "H_influenzae_summ",
+                    "S_marcescens_summ",
+                    "K_pneumoniae_summ", 
+                    "S_malto_summ")
+culture.labels <- c("Streptococcus pneumoniae",
+                    "Beta-hemolytic Streptococcus", # Group A/C/G/F-anginosus
+                    "Pseudomonas aeruginosa",
+                    "Staphylococcus aureus", 
+                    "Coagulase Neg. Staphylococcus", 
+                    "Corynebacterium pseudodiphtheriticum", 
+                    "Moraxella catarrhalis",
+                    "Haemophilus influenzae", 
+                    "Serratia marcescens",
+                    "Klebsiella pneumoniae",
+                    "Stenotrophomonas maltophilia")
+```
+
+```{r fig.width=7, fig.height=2}
+CultureBar <- ggplot(culture.data.summarized.long, aes(x = subject_id, y = org, fill = pos_neg)) +
+  geom_tile(colour = "white",
+            size = 0.5, 
+            inherit.aes = TRUE
+            #aes(fill = pos_neg)
+            ) +
+  geom_point(aes(color = pos_neg), size = 1.5) + # Make the squares dots instead
+  scale_x_discrete(breaks = heatmap.num.ordered,
+                   limits = heatmap.num.ordered,
+                   expand = c(0,3)) + #Make the boxes square
+  scale_y_discrete(expand = c(0,0),
+                   labels = rev(culture.labels),
+                   limits = rev(culture.breaks),
+                   breaks = rev(culture.breaks)) + #Make the boxes square
+  coord_fixed(ratio=1.3/1) +  #Make the boxes square
+  #  scale_fill_manual(values = c("white", "black"), na.value = "grey90") + # Use with filled boxes instead
+  scale_fill_manual(values = c("white", "white"), 
+                    na.value = "grey90") + # Make the squares dots instead
+  scale_color_manual(values = c("white", "black")) + # Make the squares dots instead
+  #  theme_minimal(base_size = 10) +
+  theme(legend.position = "",
+        axis.text.y = element_text(face = "italic", color = "black", family = "Arial", size = 7, vjust = 1, hjust=1),
+        axis.text.x = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        #axis.text.x = element_text(angle=90, hjust = 0.95, vjust = 0.2, color = "black"), # Use when confirming order
+        axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        plot.margin = margin(0,0,0,0, "cm"),
+        panel.grid = element_blank())
+CultureBar
+```
+
+```{r}
+ggsave(CultureBar, 
+       filename = "16S_output/figures/CultureBar.pdf",
+       device = cairo_pdf,
+       height = 2,
+       width = 7
+       )
+```
+

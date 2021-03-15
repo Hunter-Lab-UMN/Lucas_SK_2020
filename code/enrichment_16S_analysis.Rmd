@@ -73,13 +73,18 @@ ps
 ```
 Filter samples to just include (1) Enrichment experiment samples, (2) Enrichment experiment samples with further experiments for paper
 ```{r}
-enrich <- subset_samples(ps, grepl("enrichment", PROJECT, ignore.case = TRUE) & # just keep sample pairs from enrichments
+enrich <- subset_samples(ps, grepl("enrichment", PROJECT, ignore.case = TRUE) & 
+                           # just keep sample pairs from enrichments
                            !SAMPLE_TYPE == "control" & # remove sequence control samples
                            !is.na(ENRICH_PUB_LETTER)) %>% # keep only samples used in pub
-  filter_taxa(., function(x) sum(x) > 0, TRUE) # Remove seqs that have no counts
-  
-enrich
+                           filter_taxa(., function(x) sum(x) > 0, TRUE) # Remove seqs that have no counts
+enrich                    
 ```
+```{r}
+sample_names(enrich)
+```
+
+
 
 Read Summary
 ```{r}
@@ -224,8 +229,6 @@ ggplot(prevdf.filt.phylum, aes(TotalAbundance, Prevalence / nsamples(enrich.unsu
   theme(text = element_text(size=10)) +
   facet_wrap(~Phylum) + theme(legend.position="none")
 ```
-
-
 # Abundance Analysis
 
 ## Top Genera
@@ -371,10 +374,10 @@ heatmap
 ```
 
 ```{r}
-ggsave(heatmap, filename = "16S_output/figures/enrichment_heatmap.pdf",
-       device = "pdf",
-       height = 4.6,
-       width = 6)
+#ggsave(heatmap, filename = "16S_output/figures/enrichment_heatmap.pdf",
+#       device = "pdf",
+#       height = 4.6,
+#       width = 6)
 ```
 
 ```{r}
@@ -403,10 +406,10 @@ heatmapGrouped <- amp_heatmap(data = ampvis.obj,
 heatmapGrouped
 ```
 ```{r}
-ggsave(heatmapGrouped, filename = "16S_output/figures/enrichment_heatmap_grouped.pdf",
-       device = "pdf",
-       height = 4.6,
-       width = 3.5)
+#ggsave(heatmapGrouped, filename = "16S_output/figures/enrichment_heatmap_grouped.pdf",
+#       device = "pdf",
+#       height = 4.6,
+#       width = 3.5)
 ```
 
 # Ordination
@@ -449,9 +452,9 @@ ps.dpcoa.plot
 ```
 
 ```{r}
-ggsave(ps.dpcoa.plot, filename = "16S_output/figures/enrichment_dpcoa_biplot.pdf",
-       device = "pdf",
-       useDingbats = FALSE,
-       height = 3,
-       width = 5)
+#ggsave(ps.dpcoa.plot, filename = "16S_output/figures/enrichment_dpcoa_biplot.pdf",
+#       device = "pdf",
+#       useDingbats = FALSE,
+#       height = 3,
+#       width = 5)
 ```

@@ -343,8 +343,8 @@ heatmap.CRS <- amp_heatmap(ampvis.CRS,
                            color_vector = c("whitesmoke", "black"), #"#347A88"
                            ) + 
   theme_minimal(base_size = 14) +
-  theme(axis.text.x = element_blank(),
-        #axis.text.x = element_text(angle = 90),
+  theme(#axis.text.x = element_blank(),
+        axis.text.x = element_text(angle = 90, hjust=1, vjust=.5),
         axis.text.y = element_text(face = "italic", color = "black"),
         axis.ticks = element_blank(),
         panel.grid = element_blank(),
@@ -373,6 +373,13 @@ heatmap.CRS.df <- amp_heatmap(ampvis.CRS,
                            )
 heatmap.CRS.df
 ```
+Make a dataframe with just the sample names and numbers in the heatmap order for plotting culture data:
+```{r}
+CRS.heat.names <- colnames(heatmap.CRS.df)
+heatmap.CRS.df.names <- tibble("subject_id"=CRS.heat.names)
+#write.csv(heatmap.CRS.df.names, "../data/16S/CRS_heatmap_names_ordered.csv")
+```
+
 
 Make barplot from averages of these numbers
 ```{r fig.height=3, fig.width=1.5}
@@ -416,8 +423,8 @@ heatmap.NonCRS <- amp_heatmap(ampvis.NonCRS,
                            color_vector = c("whitesmoke", "black") #"#347A88"
                            ) + 
   theme_minimal(base_size = 14) + 
-  theme(#axis.text.x = element_text(angle=90),
-        axis.text.x = element_blank(),
+  theme(axis.text.x = element_text(angle=90),
+        #axis.text.x = element_blank(),
         axis.text.y = element_text(face="italic", color = "black"),
         axis.ticks = element_blank(),
         legend.position = "",
@@ -799,17 +806,26 @@ Actino <- data %>%
   filter(Abundance > 0,
          Phylum == "Actinobacteria")
 ```
-Actinobacteria abundance in CRS and non-CRS samples:
+Get number of CRS and non CRS to report "n" in paper
 ```{r}
-ActinoDIAGboxplot <- ggboxplot(Actino, x = "DIAG_CRS", y = "Abundance",
-          fill = "#FF0037",
-          ) + 
-  stat_compare_means(method = "wilcox.test", size = 5, label = "p.format") + 
+Actino %>%
+  group_by(DIAG_CRS) %>%
+  tally()
+```
+Actinobacteria abundance in CRS and non-CRS samples:
+```{r fig.height=2.1, fig.width=2.5}
+ActinoDIAGboxplot <- ggboxplot(Actino, 
+                               x = "DIAG_CRS", 
+                               y = "Abundance",
+                               fill = "#DE2D26", 
+                               add = "jitter", add.params = list(size=1, alpha = 0.6),
+                               xlab = "", ylab = "Actinobacteria (%)") + 
+  stat_compare_means(method = "wilcox.test", label = "p.signif", label.x = 1.4, label.y = 1.8, size = 6) + 
   scale_y_log10() +
-  labs(x = "", y = "") +
-  theme_pubr(base_size = 10) +
+  theme_pubr(base_size = 10, base_family = "Arial") +
   theme(legend.position  = "",
-        plot.margin = margin(0,1,0,0, "cm"))
+        plot.margin = margin(0.5,1,0,0, "cm")) +
+  font("ylab", size = 11, color = "black")
 ActinoDIAGboxplot
 ```
 
@@ -819,22 +835,32 @@ ActinoFESS <- filter(Actino, !is.na(SINUS_FACTORS_PRIORFESS),
                      DIAG_CRS == "CRS") %>%
   mutate(SINUS_FACTORS_PRIORFESS = ifelse(SINUS_FACTORS_PRIORFESS == 1, "Yes",
                                           ifelse(SINUS_FACTORS_PRIORFESS == 0, "No", NA)))
+```
+Get number of CRS and non CRS to report "n" in paper
+```{r}
+ActinoFESS %>%
+  group_by(SINUS_FACTORS_PRIORFESS) %>%
+  tally()
+```
+Plot ActinoFESS SINUS_FACTORS_PRIORFESS
+```{r fig.height=2.1, fig.width=2.5}
 # New levels for axis order
 ActinoFESS$SINUS_FACTORS_PRIORFESS = factor(ActinoFESS$SINUS_FACTORS_PRIORFESS, levels=c("Yes","No"))
 
-ActinoFESSboxplot <- ggboxplot(ActinoFESS, x = as.character("SINUS_FACTORS_PRIORFESS"), y = "Abundance",
-          fill = "#FF0037",
-          palette = "npg",  
-          ) + 
-  stat_compare_means(method = "wilcox.test", size = 5, label = "p.format") + 
+ActinoFESSboxplot <- ggboxplot(ActinoFESS, 
+                               x = as.character("SINUS_FACTORS_PRIORFESS"), 
+                               y = "Abundance",fill = "#DE2D26", 
+                               add = "jitter", add.params = list(size=1, alpha = 0.6),
+                               xlab = "", ylab = "Actinobacteria (%)") + 
+  stat_compare_means(method = "wilcox.test", label = "p.signif", label.x = 1.4, label.y = 1.8, size = 6) + 
   scale_y_log10() +
-  labs(x = "", y = "") +
-  theme_pubr(base_size = 10) +
+  theme_pubr(base_size = 10, base_family = "Arial") +
   theme(legend.position  = "",
-        plot.margin = margin(0,1,0,0, "cm"))
+        plot.margin = margin(0.2,1,0,0, "cm")) +
+  font("ylab", size = 11, color = "black")
 ActinoFESSboxplot
 ```
-```{r}
+```{r fig.height=2.2, fig.width=5}
 ActinoGrid <- plot_grid(ActinoDIAGboxplot, ActinoFESSboxplot, ncol = 2, align = "hv", rel_widths = c(1, 1))
 ActinoGrid
 ```
@@ -842,11 +868,11 @@ ActinoGrid
 ```{r}
 #ggsave(ActinoGrid,
 #       filename = "16S_output/figures/ActinoBoxplotGrid.pdf",
-#       device = "pdf",
+#       device = cairo_pdf,
 #       bg = "transparent",
-#      height = 2,
-#       width = 5,
-#       useDingbats = FALSE)
+#       height = 2.2,
+#       width = 5
+#       )
 ```
 Actinobacteria abundance is significantly higher in CRS subjects with no history of previous FESS.  
 

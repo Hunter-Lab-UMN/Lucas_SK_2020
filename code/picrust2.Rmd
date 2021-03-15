@@ -34,7 +34,7 @@ data
 ```{r}
 metadata <- data.frame(sample_data(data)) %>%
   select(SAMPLE_NAME, SEQ_RUN_NAME_SHORT, DIAG_CRS, DEM_AGE, DEM_SEX, SNOT20_TOTAL, LABS_S_AUREUS, LABS_S_AUREUS_GROWTH)
-write_tsv(metadata, "picrust2_output/metadata.tsv")
+#write_tsv(metadata, "picrust2_output/metadata.tsv")
 ```
 
 ## Make table.biom
@@ -67,7 +67,7 @@ ASVmatShortNames <- ASVdfShortNames %>%
 save as a biom file
 ```{r}
 asv_biom <- make_biom(data=ASVmatShortNames)
-write_biom(asv_biom,"picrust2_output/table.biom")
+#write_biom(asv_biom,"picrust2_output/table.biom")
 ```
 
 ## Make ASV fasta file
@@ -430,11 +430,11 @@ CRSgrid <- plot_grid(CRStop10CAZyClass,
 CRSgrid
 ```
 ```{r}
-ggsave(CRSgrid, filename = "picrust2_output/figures/CRSTop10ComboTaxFilt.pdf",
-       device = "pdf",
-       height = 3,
-       width = 8,
-       useDingbats = FALSE)
+#ggsave(CRSgrid, filename = "picrust2_output/figures/CRSTop10ComboTaxFilt.pdf",
+#       device = "pdf",
+#       height = 3,
+#       width = 8,
+#      useDingbats = FALSE)
 ```
 
 ### CAZy Only - Non-CRS
@@ -580,11 +580,11 @@ NonCRSgrid <- plot_grid(NonCRStop10CAZyClass,
 NonCRSgrid
 ```
 ```{r}
-ggsave(NonCRSgrid, filename = "picrust2_output/figures/NonCRSTop10ComboTaxFilt.pdf",
-       device = "pdf",
-      height = 3,
-       width = 8,
-       useDingbats = FALSE)
+#ggsave(NonCRSgrid, filename = "picrust2_output/figures/NonCRSTop10ComboTaxFilt.pdf",
+#       device = "pdf",
+#      height = 3,
+#       width = 8,
+#       useDingbats = FALSE)
 ```
 
 
@@ -595,10 +595,10 @@ CRSnonCRSgrid <- plot_grid(CRSgrid, NonCRSgrid,
 CRSnonCRSgrid
 ```
 ```{r}
-ggsave(CRSnonCRSgrid, filename = "picrust2_output/figures/Figure2grid.pdf",
-       device = "pdf",
-      height = 3,
-       width = 8,
-       useDingbats = FALSE)
+#ggsave(CRSnonCRSgrid, filename = "picrust2_output/figures/Figure2grid.pdf",
+#       device = "pdf",
+#      height = 3,
+#       width = 8,
+#       useDingbats = FALSE)
 ```
 

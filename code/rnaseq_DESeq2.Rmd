@@ -104,9 +104,9 @@ sigtab262vsMMMGalpha05beta1 <- filter(df262vsMMMGalpha05beta1, padj < .05)
 ```
 Export csv files for significant DEGs
 ```{r}
-write_csv(sigtab234vsMMMGalpha05beta1, path = "rnaseq_output/sigtab234vsMMMGalpha05beta1.csv")
-write_csv(sigtab243vsMMMGalpha05beta1, path = "rnaseq_output/sigtab243vsMMMGalpha05beta1.csv")
-write_csv(sigtab262vsMMMGalpha05beta1, path = "rnaseq_output/sigtab262vsMMMGalpha05beta1.csv")
+#write_csv(sigtab234vsMMMGalpha05beta1, path = "rnaseq_output/sigtab234vsMMMGalpha05beta1.csv")
+#write_csv(sigtab243vsMMMGalpha05beta1, path = "rnaseq_output/sigtab243vsMMMGalpha05beta1.csv")
+#write_csv(sigtab262vsMMMGalpha05beta1, path = "rnaseq_output/sigtab262vsMMMGalpha05beta1.csv")
 ```
 
 ### Function: Custom MA Plots
@@ -140,9 +140,9 @@ maPlot262 <- makeMA(df262vsMMMGalpha05beta1) + ggtitle("MMMG vs CFS-H")
 maPlot262
 ```
 ```{r include = FALSE}
-ggsave(maPlot234, filename = "rnaseq_output/maplot234vsMMMG.pdf", height=4, width=4)
-ggsave(maPlot243, filename = "rnaseq_output/maplot243vsMMMG.pdf", height=4, width=4)
-ggsave(maPlot262, filename = "rnaseq_output/maplot262vsMMMG.pdf", height=4, width=4)
+#ggsave(maPlot234, filename = "rnaseq_output/maplot234vsMMMG.pdf", height=4, width=4)
+#ggsave(maPlot243, filename = "rnaseq_output/maplot243vsMMMG.pdf", height=4, width=4)
+#ggsave(maPlot262, filename = "rnaseq_output/maplot262vsMMMG.pdf", height=4, width=4)
 ```
 
 # Differential Abundance: Sample vs. Control
@@ -217,7 +217,7 @@ maPlotSamplevControl <- ggmaplot(dfSamplevControlalpha05beta1,
 maPlotSamplevControl
 ```
 ```{r}
-ggsave(maPlotSamplevControl, filename = "rnaseq_output/maPlotSamplevControl.pdf", height = 5, width = 7)
+#ggsave(maPlotSamplevControl, filename = "rnaseq_output/maPlotSamplevControl.pdf", height = 5, width = 7)
 ```
 
 ### Final tables of DEGs
@@ -228,7 +228,7 @@ sigtabSamplevControl <- filter(dfSamplevControlalpha05beta1, padj < .05)
 
 ### Export data files
 ```{r}
-write_csv(sigtabSamplevControl, path = "rnaseq_output/sigtabSamplevControlalpha05beta1.csv")
+#write_csv(sigtabSamplevControl, path = "rnaseq_output/sigtabSamplevControlalpha05beta1.csv")
 ```
 
 # Session Info

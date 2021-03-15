@@ -6,6 +6,7 @@
 *.rds
 .Rproj.user
 
-
+silva_nr_v132_train_set.fa.gz
+silva_species_assignment_v132.fa.gz
 # ignore directories
 data/rnaseq/GCF_ASM1346v1
