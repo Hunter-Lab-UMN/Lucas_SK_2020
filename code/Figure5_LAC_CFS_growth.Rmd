@@ -8,14 +8,18 @@ Growth curves were performed with S. aureus strain LAC (USA300) in 8 different s
 # Setup
 ## Packages
 ```{r}
-library(tidyverse)
-library(hms)
-library(cowplot)
-library(ggpubr)
+library(tidyverse, warn.conflicts = F, quietly = T)
+library(lubridate, warn.conflicts = F, quietly = T)
+library(hms, warn.conflicts = F, quietly = T)
+library(cowplot, warn.conflicts = F, quietly = T)
+library(ggpubr, warn.conflicts = F, quietly = T)
+library(growthcurver, warn.conflicts = F, quietly = T)
 ```
-## Plotting
+## Aesthetics
 ```{r results=FALSE}
 cbPal <- c("pink","#E69F00","#56B4E9","#009E73","#F0E442", "#0072B2","#75437C","#B52F25") 
+
+cbPal_MMM <- c("grey20","pink","#E69F00","#56B4E9","#009E73","#F0E442", "#0072B2","#75437C","#B52F25") 
 ```
 ## Experiemntal Parameters to fill in: Media in plate
 ```{r results=FALSE}
@@ -36,11 +40,13 @@ Bio3 <- "LAC3"
 Bio4 <- "Medium_Control"
 ```
 
-# Data import and tidying
+# Aerobic Data
 
 ## Import data
+
+Data from enrichment growth curves
 ```{r}
-start_time <- as.hms(00:00:00)
+start_time <- as_hms(00:00:00)
 
 AerobicData <- read_tsv("../data/enrichment/USA300_growth/Supernatant_Growth_Curves_LAC_11SEP2019.txt", skip = 34) %>%
   select(-contains("600")) %>%
@@ -63,13 +69,41 @@ AerobicData <- read_tsv("../data/enrichment/USA300_growth/Supernatant_Growth_Cur
   mutate(difftime = as.numeric(abs(difftime(start_time, Time, units = "hours"))))
 AerobicData$Column <- as.numeric(AerobicData$Column)
 ```
+### Bring in data for MMM plotting
+```{r}
+start_time <- as.hms(00:00:00)
+
+AerobicMMMData <- read_csv("../data/enrichment/USA300_growth/Growth_Curve_MMM_Add_12MAR2020.csv", skip = 46) %>%
+  select(-contains("600")) %>%
+  filter(!is.na(Time)) %>%
+  gather(key = Well, value = OD600, A1:H12) %>%
+  separate(Well, into = c("rowx","Column"), sep = "[[:alpha:]]", remove = FALSE) %>%
+  separate(Well, into = c("Row","columnx"), sep = "[[:digit:]]", remove = FALSE) %>%
+  select(Time, Well, Row, Column, OD600) %>%
+  mutate(Medium = ifelse(Row == "A", "MMM", NA)) %>%
+  filter(Medium == "MMM") %>%
+  mutate(BioRep = ifelse(Column %in% 1:3, Bio1,
+                         ifelse(Column %in% 4:6, Bio2,
+                                ifelse(Column %in% 7:9, Bio3,
+                                       Bio4)))) %>%
+  mutate(difftime = as.numeric(abs(difftime(start_time, Time, units = "hours")))) %>%
+  select(-Row) %>%
+  mutate(Row = "MMM.A") %>% 
+  select(Time, Well, Row, Column, OD600, Medium, BioRep, difftime)
+AerobicMMMData$Column <- as.numeric(AerobicMMMData$Column)
+```
+Bind with supernatant data:
+```{r}
+AerobicData <- bind_rows(AerobicData, AerobicMMMData)
+```
+
 ## Growth Curves by well
 ```{r}
 GC_plate_plot <- ggplot(AerobicData, aes(x=difftime, y=OD600, color = Medium)) + 
   facet_grid(Row ~ Column) +
   theme_classic() + 
   geom_line(size = 1) +
-  scale_color_manual(values = c(cbPal)) +
+  scale_color_manual(values = c(cbPal_MMM)) +
   scale_y_log10() +
   annotation_logticks(base = 10, 
                       sides = "l"
@@ -81,6 +115,8 @@ GC_plate_plot <- ggplot(AerobicData, aes(x=difftime, y=OD600, color = Medium)) +
   )
 GC_plate_plot
 ```
+
+
 ## Normalize
 Subtract data blanks at each time point for each medium.
 ```{r}
@@ -105,28 +141,28 @@ data_join_summarized <- data_join_blank %>%
   group_by(Medium, Time, difftime) %>%
   summarize(mean_blanked_OD600 = mean(blanked_OD600), sd_blanked_OD600 = sd(blanked_OD600)) %>%
   ungroup()
-data_join_summarized$Time <- hms::as.hms(data_join_summarized$Time)
+data_join_summarized$Time <- hms::as_hms(data_join_summarized$Time)
 ```
-# Plot Growth Curves
-## Filter for plotting points and error bars
+## Plot Growth Curves
+### Filter for plotting points and error bars
 ```{r}
 # Filter dataset to just include data from first 12 hours of growth curve
-data_join_summarized_filt_12Hr <- filter(data_join_summarized, Time < as.hms("12:00:00"))
+data_join_summarized_filt_12Hr <- filter(data_join_summarized, Time < as_hms("12:00:00"))
 
 # For plotting points and error bars, just filter data to hourly 
 # timepoints instead of half hours
-data_join_filt_12Hr_error <- filter(data_join_summarized_filt_12Hr, minute(Time) == 29)
-data_join_summarized_error <- filter(data_join_summarized, minute(Time) == 29)
+data_join_filt_12Hr_error <- filter(data_join_summarized_filt_12Hr, lubridate::minute(Time) == 29)
+data_join_summarized_error <- filter(data_join_summarized, lubridate::minute(Time) == 29)
 ```
 
-## Plot
+### Plot
 Growth curves are plotted at half hour intervals, while points and error bars are plotted at hourly intervals to avoid overplotting and enable readability of the graph.
-```{r}
+```{r fig.height=3, fig.width=3.8}
 # plotting points and error bars for when they overlap
 pd <- position_dodge(0.1) # move them .05 to the left and right
 # Plot
 GC_plot_sd <- ggplot(data_join_summarized_filt_12Hr) +
-  geom_line(aes(x=difftime, y=mean_blanked_OD600, color = Medium), size = .8) +
+  geom_line(aes(x=difftime, y=mean_blanked_OD600, color = Medium), size = .5) +
   geom_errorbar(data = data_join_filt_12Hr_error, 
                 mapping = aes(x = difftime, 
                               ymin = mean_blanked_OD600-sd_blanked_OD600, 
@@ -135,8 +171,10 @@ GC_plot_sd <- ggplot(data_join_summarized_filt_12Hr) +
   geom_point(data = data_join_filt_12Hr_error, 
              mapping = aes(x = difftime, 
                            y = mean_blanked_OD600, 
-                           color = Medium)) +
-  scale_color_manual(breaks = c("Super164",
+                           color = Medium),
+             size = 1) +
+  scale_color_manual(breaks = c("MMM",
+                                "Super164",
                                 "Super222",
                                 "Super230",
                                 "Super234",
@@ -144,7 +182,8 @@ GC_plot_sd <- ggplot(data_join_summarized_filt_12Hr) +
                                 "Super243",
                                 "Super260",
                                 "Super262"), 
-                     labels = c("A",
+                     labels = c("MMM",
+                                "A",
                                 "B",
                                 "C",
                                 "D",
@@ -153,9 +192,9 @@ GC_plot_sd <- ggplot(data_join_summarized_filt_12Hr) +
                                 "G", 
                                 "H"), 
                      name = "Supernatant", 
-                     values = cbPal) +
-  scale_y_log10(limits = c(.01,.6), breaks = c(.01,.1,.5)) +
-  scale_x_continuous(limits = c(0,12), breaks = c(0,3,6,9,12)) +
+                     values = cbPal_MMM) +
+  scale_y_log10(limits = c(.01,.45), breaks = c(.01,.1,.4)) +
+  scale_x_continuous(limits = c(0,12), breaks = c(0,2,4,6,8,10,12)) +
   annotation_logticks(base = 10, sides = "l") +
   labs(x = "Time (hrs)", y = expression(paste("O.D."[600][nm]))) +
   theme_pubr(base_size = 10) + 
@@ -164,4 +203,179 @@ GC_plot_sd <- ggplot(data_join_summarized_filt_12Hr) +
 )
 #  theme_transparent
 GC_plot_sd
+```
+
+# Anaerobic Data
+## Load data 
+Growth data is OD600 reading of a 96well plate after 15 seconds of shaking (with lid off to avoid condensation) from 24 hour anaerobic growth of S. aureus LAC on the 8 different supernatants from supernatant batch 06SEP2019. MMM Control was taken from the MMM growth curves because it could not fit on the plate with the 8 different supernatants. 
+```{r}
+anaerobic_supers <- read_csv(file = "../data/enrichment/USA300_growth/12SEPT2019_Anaerobic_and_Nitrate_OD600_plateread_long.csv")
+# Pull out MMM growth data to compare plots
+anaerobic_MMM <- read_tsv(file = "../data/enrichment/USA300_growth/24Hr_Anaerobic_Growth_MMM-CAA-Lactate_30AUG2019.txt") %>%
+  filter(Medium == "MMM")
+# Bind two datasets together
+anaerobic <- rbind(anaerobic_supers, anaerobic_MMM)
+anaerobic
+```
+
+## Normalize
+Subtract data blanks at each time point for each medium. Calculate average OD600 readings. Tidy data for plotting.
+```{r}
+# Separate out samples from blanks
+anaerobic_samples <- anaerobic %>%
+  filter(BioRep != "Blank")
+
+anaerobic_blanks <- anaerobic %>%
+  filter(BioRep == "Blank") %>%
+  group_by(Medium,GrowthCondition) %>%
+  # Get the mean of the three blank wells for each of the supernatants. 
+  # This number will be used to blank the remaining wells of each row.
+  summarize(blank_mean_OD600 = mean(OD600)) 
+
+# Combine data back together, with a new column for averaged blanks
+anaerobic_data_join <- left_join(anaerobic_samples, anaerobic_blanks)
+anaerobic_data_join
+
+# Subtract average blank for each supernatant from each well at each timepoint.
+anaerobic_data_blank <- anaerobic_data_join %>%
+  mutate(blanked_OD600 = OD600 - blank_mean_OD600)
+```
+
+## Summarize
+```{r}
+# For barplots - summarized data for each medium/condition
+anaerobic_data_summarize <- anaerobic_data_blank %>%
+  group_by(Medium, GrowthCondition) %>%
+  summarize(sd_blanked_OD600 = sd(blanked_OD600), blanked_OD600 = mean(blanked_OD600)) %>%
+  ungroup()
+```
+
+## Plot  
+
+Use pubr package to put stats on the graph: benefits are, easy plotting syntax, and easy addition of statistics
+```{r}
+ttest_compare <- compare_means(blanked_OD600 ~ PlotLetter,  data = anaerobic_data_blank, ref.group = "MMM",
+              method = "t.test", group.by = "GrowthCondition")
+ttest_compare
+```
+```{r}
+# fig.height = 3, fig.width = 4, fig.alight="center"
+pubbarplot <- ggbarplot(anaerobic_data_blank, 
+                        x = "PlotLetter", y = "blanked_OD600",
+                        add = c("mean_sd", 
+                                "point"
+                                ),
+                        facet.by = "GrowthCondition",
+                        color = "black", 
+                        fill = "Medium", palette = cbPal_MMM, 
+                        ggtheme = theme_pubr(base_size = 10)) +
+  scale_x_discrete(limits = c("MMM","A","B","C","D","E","F","G","H")) +
+  scale_y_continuous(limits = c(-.005,.12), breaks = c(0,.02,.04, .06, .08,.1)) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks = element_line(color = "black")) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks = element_line(color = "black"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(axis.ticks = element_line(color = "black"),
+        axis.line = element_line(color = "black"),
+        axis.text = element_text(color = "black"),
+        axis.title = element_text(color = "black")) 
+  labs(y = expression(paste("O.D."[600][nm]))) +
+  # add adjusted p-value stats to plot
+  stat_pvalue_manual(ttest_compare, label = "p.signif", 
+                     y.position = 0.09, 
+                     remove.bracket = TRUE, 
+                     color = "black")
+
+pubbarplot 
+```
+
+```{r}
+#ggsave(pubbarplot, 
+#       filename = "enrichment_output/LAC_anaerobic_24hr_barplot.pdf", 
+#       useDingbats = FALSE, 
+#       height = 3,
+#       width = 5,
+#       device = "pdf")
+```
+
+
+# Growthcurver package method
+
+I'll use the growthcurvr plackage to determine growth rates to plot for a supplemental figure.
+\
+Using GrowthcurvR package to analyze curves using already blanked data from data_join_blank
+\
+Convert time from data_join_blank from a time variable to elapsed time in minutes using difftime from the lubridate package
+
+```{r}
+start_time <- as_hms(00:00:00)
+data_join_blank$Well <- as.character(data_join_blank$Well)
+growthdata <- data_join_blank %>%
+  filter(!Medium == "MMM") %>%
+  mutate(time = as.numeric(abs(difftime(start_time, Time, units = "hours")))) %>%
+  arrange(time, Column) %>%
+  select(time, Well, blanked_OD600) %>%
+  pivot_wider(names_from = Well, values_from = blanked_OD600)
+head(growthdata)
+```
+Run Growthplater function SummarizeGrowthByPlate to get growth rate, generation time, etc.
+```{r}
+gc_out <- SummarizeGrowthByPlate(growthdata, t_trim = 12, bg_correct = "none")
+```
+Add Medium assignments to data frame and create a summary table
+```{r}
+gc_out_medium <- gc_out %>%
+  separate(sample, into = c("rowx","Column"), sep = "[[:alpha:]]", remove = FALSE) %>%
+  separate(sample, into = c("Row","columnx"), sep = "[[:digit:]]", remove = FALSE) %>%
+  select(Row, Column, k, n0, r, t_mid, t_gen, auc_l, auc_e, sigma) %>%
+  mutate(Medium = ifelse(Row == "A", Medium.A,
+                         ifelse(Row == "B", Medium.B, 
+                                ifelse(Row == "C", Medium.C, 
+                                       ifelse(Row == "D", Medium.D, 
+                                              ifelse(Row == "E", Medium.E, 
+                                                     ifelse(Row == "F", Medium.F, 
+                                                            ifelse(Row == "G", Medium.G, 
+                                                                   Medium.H))))))))
+gc_out_summary <- gc_out_medium %>%
+  select(-Column) %>%
+  group_by(Medium,Row) %>%
+  summarize_all(list(mean))
+```
+Check assumptions for ANOVA
+```{r}
+res.aov <- aov(r ~ Medium, data = gc_out_medium)
+summary(res.aov)
+plot(res.aov, 1) # heteroscedacity
+plot(res.aov, 2) # normality
+
+library(car)
+leveneTest(r ~ Medium, data = gc_out_medium) # test to see if an anova is appropriate
+```
+
+```{r}
+# fig.height = 3, fig.width = 4, fig.alight="center"
+growthrate_boxplot <- ggboxplot(gc_out_medium, 
+                        x = "Row", y = "r",
+                        add = c("point"),
+                        color = "black", fill = "Medium", palette = cbPal, 
+                        ggtheme = theme_pubr(base_size = 14)) +
+#  scale_x_discrete(limits = c("A","B","C","D","E","F","G","H")) +
+#  scale_y_continuous(limits = c(-.005,.12), breaks = c(0,.02,.04, .06, .08,.1, .12)) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks = element_line(color = "black")) +
+  #theme_transparent +
+  labs(y = "Growth Rate (r)") +
+  stat_compare_means(method = "anova")
+
+  # add adjusted p-value stats to plot
+#  stat_pvalue_manual(ttest_compare, label = "p.signif", y.position = -0.005, remove.bracket = TRUE)
+
+growthrate_boxplot 
 ```

@@ -6,13 +6,13 @@ author: "Sarah Lucas"
 # Setup
 ## Packages
 ```{r}
-library(tidyverse)
-library(lubridate)
-library(cowplot)
-library(scales)
-library(hms)
-library(ggpubr)
-library(extrafont)
+library(tidyverse, warn.conflicts = F, quietly = T)
+library(lubridate, warn.conflicts = F, quietly = T)
+library(cowplot, warn.conflicts = F, quietly = T)
+library(scales, warn.conflicts = F, quietly = T)
+library(hms, warn.conflicts = F, quietly = T)
+library(ggpubr, warn.conflicts = F, quietly = T)
+library(extrafont, warn.conflicts = F, quietly = T)
 ```
 
 ## Plotting
@@ -29,7 +29,7 @@ cbPal <- c("pink",  # 164
 
 
 # Aerobic Growth
-## Experiemntal Parameters to fill in: Media in plate
+## Experimental Parameters to fill in: Media in plate
 ```{r}
 Medium.A <- "MMM"
 Medium.B <- "MMM+Lactate(0.5%)"
@@ -363,6 +363,8 @@ anaerobic_pubbarplot <- ggbarplot(anaerobic_data_blank,
 anaerobic_pubbarplot 
 ```
 
+
+\
 I want to average these values with the previous anaerobic growth data from my August2019 experiment. The only difference between experiments is MMM batch.
 
 ## Import Anaerobic data from August 2019
@@ -389,7 +391,7 @@ anaerobicAug2019_data_join <- left_join(anaerobicAug2019_samples, anaerobicAug20
 # For boxplots - blanked datapoints
 anaerobicAug2019_data_blank <- anaerobicAug2019_data_join %>%
   mutate(blanked_OD600 = OD600 - blank_mean_OD600) %>%
-  mutate(Date = "Aug2020") %>%
+  mutate(Date = "Aug2019") %>%
   select(Date, GrowthCondition, Medium, BioRep, OD600, blank_mean_OD600, blanked_OD600)
 ```
 
@@ -433,6 +435,9 @@ anaerobicBind_pubbarplot <- ggbarplot(anaerobicBind,
 
 anaerobicBind_pubbarplot 
 ```
+
+
+
 Ok, these runs look really comparable so I feel OK averaging the numbers and adding the glucose conditions.
 
 ```{r}
@@ -502,18 +507,18 @@ Figure4
 ```
 
 ```{r}
-ggsave(Figure4, filename = "enrichment_output/Figure4.pdf",
-       device = cairo_pdf,
-       dpi = 300,
-       #useDingbats = FALSE,
-       width = 8,
-       height = 3)
+#ggsave(Figure4, filename = "enrichment_output/Figure4.pdf",
+#       device = cairo_pdf,
+#       dpi = 300,
+#       #useDingbats = FALSE,
+#       width = 8,
+#       height = 3)
 ```
 ```{r}
-ggsave(Figure4, filename = "enrichment_output/Figure4.png",
-       device = "png",
-       #useDingbats = FALSE,
-       width = 8,
-       height = 3)
+#ggsave(Figure4, filename = "enrichment_output/Figure4.png",
+#       device = "png",
+#       #useDingbats = FALSE,
+#       width = 8,
+#       height = 3)
 ```
 
